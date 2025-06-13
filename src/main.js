@@ -61,6 +61,13 @@ class DofusOrganizer {
 
   updateTrayMenu() {
     const lang = this.languageManager.getCurrentLanguage();
+    const gameType = this.store.get('globalGameType', 'dofus2');
+    const gameTypeLabels = {
+      'dofus2': 'Dofus 2',
+      'dofus3': 'Dofus 3',
+      'retro': 'Dofus Retro'
+    };
+    
     const contextMenu = Menu.buildFromTemplate([
       {
         label: lang.main_configure,
@@ -71,6 +78,29 @@ class DofusOrganizer {
         click: () => this.refreshAndSort()
       },
       { type: 'separator' },
+      {
+        label: `Game Type: ${gameTypeLabels[gameType]}`,
+        submenu: [
+          {
+            label: 'Dofus 2',
+            type: 'radio',
+            checked: gameType === 'dofus2',
+            click: () => this.changeGameType('dofus2')
+          },
+          {
+            label: 'Dofus 3',
+            type: 'radio',
+            checked: gameType === 'dofus3',
+            click: () => this.changeGameType('dofus3')
+          },
+          {
+            label: 'Dofus Retro',
+            type: 'radio',
+            checked: gameType === 'retro',
+            click: () => this.changeGameType('retro')
+          }
+        ]
+      },
       {
         label: lang.main_language,
         submenu: this.languageManager.getLanguageMenu((langCode) => {
@@ -92,6 +122,15 @@ class DofusOrganizer {
     ]);
     
     this.tray.setContextMenu(contextMenu);
+  }
+
+  changeGameType(gameType) {
+    this.store.set('globalGameType', gameType);
+    this.windowManager.setGlobalGameType(gameType);
+    this.updateTrayMenu();
+    
+    // Refresh windows to apply new detection
+    setTimeout(() => this.refreshAndSort(), 500);
   }
 
   showConfigWindow() {
@@ -265,6 +304,14 @@ class DofusOrganizer {
       this.shortcutManager.removeWindowShortcut(windowId);
     });
 
+    ipcMain.handle('set-game-type', (event, gameType) => {
+      this.changeGameType(gameType);
+    });
+
+    ipcMain.handle('organize-windows', (event, layout) => {
+      return this.windowManager.organizeWindows(layout);
+    });
+
     ipcMain.on('show-config', () => {
       this.showConfigWindow();
     });
@@ -277,6 +324,10 @@ class DofusOrganizer {
   loadSettings() {
     const language = this.store.get('language', 'FR');
     this.languageManager.setLanguage(language);
+    
+    // Load and set global game type
+    const gameType = this.store.get('globalGameType', 'dofus2');
+    this.windowManager.setGlobalGameType(gameType);
     
     // Load and register shortcuts
     const shortcuts = this.store.get('shortcuts', {});
@@ -337,8 +388,14 @@ class DofusOrganizer {
     const lang = this.languageManager.getCurrentLanguage();
     const windowCount = this.dofusWindows.length;
     const enabledCount = this.dofusWindows.filter(w => w.enabled).length;
+    const gameType = this.store.get('globalGameType', 'dofus2');
+    const gameTypeLabels = {
+      'dofus2': 'Dofus 2',
+      'dofus3': 'Dofus 3',
+      'retro': 'Dofus Retro'
+    };
     
-    let tooltip = 'Dofus Organizer\n';
+    let tooltip = `Dofus Organizer (${gameTypeLabels[gameType]})\n`;
     if (windowCount === 0) {
       tooltip += lang.displayTray_element_0;
     } else if (windowCount === 1) {

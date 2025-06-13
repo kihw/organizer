@@ -1,416 +1,290 @@
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
+const { globalShortcut } = require('electron');
 
-class WindowManager {
+class ShortcutManager {
   constructor() {
-    this.windows = new Map();
-    this.lastWindowCheck = 0;
-    this.isLinux = process.platform === 'linux';
+    this.shortcuts = new Map();
+    this.active = false;
+    this.registeredAccelerators = new Set();
   }
 
-  async getDofusWindows() {
+  setWindowShortcut(windowId, shortcut, callback) {
+    // Remove existing shortcut for this window
+    this.removeWindowShortcut(windowId);
+    
+    if (!shortcut || !callback) return false;
+
     try {
-      // Throttle window checks to avoid performance issues
-      const now = Date.now();
-      if (now - this.lastWindowCheck < 1000) {
-        return Array.from(this.windows.values()).map(w => w.info);
-      }
-      this.lastWindowCheck = now;
-
-      let dofusWindows = [];
+      const accelerator = this.convertShortcutToAccelerator(shortcut);
       
-      if (this.isLinux) {
-        dofusWindows = await this.getLinuxWindows();
-      } else {
-        // Fallback for other platforms
-        dofusWindows = await this.getFallbackWindows();
+      // Check if accelerator is already registered
+      if (this.registeredAccelerators.has(accelerator)) {
+        console.warn(`Shortcut ${accelerator} is already registered`);
+        return false;
       }
-
-      // Sort by initiative (descending), then by character name
-      dofusWindows.sort((a, b) => {
-        if (b.initiative !== a.initiative) {
-          return b.initiative - a.initiative;
+      
+      const success = globalShortcut.register(accelerator, () => {
+        try {
+          callback();
+        } catch (error) {
+          console.error('Error executing shortcut callback:', error);
         }
-        return a.character.localeCompare(b.character);
       });
       
-      return dofusWindows;
-    } catch (error) {
-      console.error('Error getting Dofus windows:', error);
-      return [];
-    }
-  }
-
-  async getLinuxWindows() {
-    try {
-      // Use wmctrl to get window list on Linux
-      const { stdout } = await execAsync('wmctrl -l -x 2>/dev/null || echo ""');
-      const windows = [];
-      const currentWindowIds = new Set();
-
-      if (stdout.trim()) {
-        const lines = stdout.trim().split('\n');
+      if (success) {
+        this.shortcuts.set(windowId, {
+          accelerator,
+          callback,
+          original: shortcut
+        });
         
-        for (const line of lines) {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 4) {
-            const windowId = parts[0];
-            const className = parts[2];
-            const title = parts.slice(3).join(' ');
-            
-            if (this.isDofusWindow(title) || this.isDofusWindow(className)) {
-              currentWindowIds.add(windowId);
-              
-              const windowInfo = {
-                id: windowId,
-                title: title,
-                processName: className.split('.')[0] || 'Dofus',
-                character: this.extractCharacterName(title),
-                initiative: this.getStoredInitiative(windowId),
-                isActive: await this.isLinuxWindowActive(windowId),
-                bounds: await this.getLinuxWindowBounds(windowId),
-                avatar: this.getStoredAvatar(windowId),
-                shortcut: this.getStoredShortcut(windowId),
-                enabled: this.getStoredEnabled(windowId)
-              };
-              
-              windows.push(windowInfo);
-              this.windows.set(windowId, { info: windowInfo });
-            }
-          }
-        }
-      }
-
-      // Remove windows that no longer exist
-      for (const [windowId] of this.windows) {
-        if (!currentWindowIds.has(windowId)) {
-          this.windows.delete(windowId);
-        }
-      }
-
-      return windows;
-    } catch (error) {
-      console.warn('wmctrl not available, using fallback method');
-      return this.getFallbackWindows();
-    }
-  }
-
-  async getFallbackWindows() {
-    try {
-      // Fallback using ps and xdotool if available
-      const { stdout } = await execAsync('ps aux | grep -i dofus | grep -v grep || echo ""');
-      const windows = [];
-      
-      if (stdout.trim()) {
-        const lines = stdout.trim().split('\n');
+        this.registeredAccelerators.add(accelerator);
         
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.includes('dofus') || line.includes('Dofus')) {
-            const windowId = `fallback_${i}`;
-            const title = this.extractTitleFromProcess(line);
-            
-            const windowInfo = {
-              id: windowId,
-              title: title,
-              processName: 'Dofus',
-              character: this.extractCharacterName(title),
-              initiative: this.getStoredInitiative(windowId),
-              isActive: true,
-              bounds: { x: 0, y: 0, width: 800, height: 600 },
-              avatar: this.getStoredAvatar(windowId),
-              shortcut: this.getStoredShortcut(windowId),
-              enabled: this.getStoredEnabled(windowId)
-            };
-            
-            windows.push(windowInfo);
-            this.windows.set(windowId, { info: windowInfo });
-          }
-        }
-      }
-
-      return windows;
-    } catch (error) {
-      console.error('Error in fallback window detection:', error);
-      return [];
-    }
-  }
-
-  extractTitleFromProcess(processLine) {
-    // Extract title from process command line
-    const parts = processLine.split(/\s+/);
-    for (let i = 0; i < parts.length; i++) {
-      if (parts[i].toLowerCase().includes('dofus')) {
-        return parts.slice(i).join(' ').substring(0, 50);
-      }
-    }
-    return 'Dofus Window';
-  }
-
-  async isLinuxWindowActive(windowId) {
-    try {
-      const { stdout } = await execAsync(`xprop -id ${windowId} _NET_WM_STATE 2>/dev/null || echo ""`);
-      return !stdout.includes('_NET_WM_STATE_HIDDEN');
-    } catch (error) {
-      return true; // Assume active if we can't determine
-    }
-  }
-
-  async getLinuxWindowBounds(windowId) {
-    try {
-      const { stdout } = await execAsync(`xwininfo -id ${windowId} 2>/dev/null || echo ""`);
-      const lines = stdout.split('\n');
-      
-      let x = 0, y = 0, width = 800, height = 600;
-      
-      for (const line of lines) {
-        if (line.includes('Absolute upper-left X:')) {
-          x = parseInt(line.split(':')[1].trim()) || 0;
-        } else if (line.includes('Absolute upper-left Y:')) {
-          y = parseInt(line.split(':')[1].trim()) || 0;
-        } else if (line.includes('Width:')) {
-          width = parseInt(line.split(':')[1].trim()) || 800;
-        } else if (line.includes('Height:')) {
-          height = parseInt(line.split(':')[1].trim()) || 600;
-        }
-      }
-      
-      return { x, y, width, height };
-    } catch (error) {
-      return { x: 0, y: 0, width: 800, height: 600 };
-    }
-  }
-
-  isDofusWindow(title) {
-    if (!title || typeof title !== 'string') return false;
-    
-    const dofusPatterns = [
-      /dofus/i,
-      /ankama/i,
-      /retro/i,
-      /wakfu/i
-    ];
-    
-    // Exclude system windows and browsers
-    const excludePatterns = [
-      /chrome/i,
-      /firefox/i,
-      /explorer/i,
-      /desktop/i,
-      /taskbar/i,
-      /gnome/i,
-      /kde/i,
-      /xfce/i
-    ];
-    
-    const isDofus = dofusPatterns.some(pattern => pattern.test(title));
-    const isExcluded = excludePatterns.some(pattern => pattern.test(title));
-    
-    return isDofus && !isExcluded;
-  }
-
-  extractCharacterName(title) {
-    if (!title) return 'Unknown';
-    
-    // Try to extract character name from window title
-    const patterns = [
-      /dofus\s*-\s*(.+?)(?:\s*\(|$)/i,
-      /(.+?)\s*-\s*dofus/i,
-      /(.+?)(?:\s*-\s*ankama)?$/i
-    ];
-    
-    for (const pattern of patterns) {
-      const match = title.match(pattern);
-      if (match && match[1]) {
-        let name = match[1].trim();
-        // Clean up common suffixes
-        name = name.replace(/\s*\(.*\)$/, '');
-        name = name.replace(/\s*-.*$/, '');
-        if (name.length > 0 && name.length < 50) {
-          return name;
-        }
-      }
-    }
-    
-    return title.length > 30 ? title.substring(0, 30) + '...' : title;
-  }
-
-  async activateWindow(windowId) {
-    try {
-      if (this.isLinux) {
-        return await this.activateLinuxWindow(windowId);
+        // Store in persistent storage
+        this.saveShortcutToStore(windowId, shortcut);
+        
+        return true;
       } else {
-        return this.activateFallbackWindow(windowId);
+        console.warn(`Failed to register shortcut: ${accelerator}`);
       }
     } catch (error) {
-      console.error('Error activating window:', error);
-      return false;
+      console.error('Error setting shortcut:', error);
     }
+    
+    return false;
   }
 
-  async activateLinuxWindow(windowId) {
-    try {
-      // Try multiple methods to activate window on Linux
-      const commands = [
-        `wmctrl -i -a ${windowId}`,
-        `xdotool windowactivate ${windowId}`,
-        `xprop -id ${windowId} -f _NET_ACTIVE_WINDOW 32a -set _NET_ACTIVE_WINDOW 1`
-      ];
-
-      for (const command of commands) {
-        try {
-          await execAsync(command + ' 2>/dev/null');
-          return true;
-        } catch (e) {
-          // Try next command
-          continue;
-        }
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error activating Linux window:', error);
-      return false;
-    }
-  }
-
-  activateFallbackWindow(windowId) {
-    // Fallback activation method
-    console.log(`Attempting to activate window: ${windowId}`);
-    return true;
-  }
-
-  async moveWindow(windowId, x, y) {
-    try {
-      if (this.isLinux) {
-        await execAsync(`wmctrl -i -r ${windowId} -e 0,${x},${y},-1,-1 2>/dev/null`);
+  removeWindowShortcut(windowId) {
+    const shortcutInfo = this.shortcuts.get(windowId);
+    if (shortcutInfo) {
+      try {
+        globalShortcut.unregister(shortcutInfo.accelerator);
+        this.registeredAccelerators.delete(shortcutInfo.accelerator);
+        this.shortcuts.delete(windowId);
+        
+        // Remove from persistent storage
+        this.removeShortcutFromStore(windowId);
+        
         return true;
+      } catch (error) {
+        console.error('Error removing shortcut:', error);
       }
-    } catch (error) {
-      console.error('Error moving window:', error);
     }
     return false;
   }
 
-  async resizeWindow(windowId, width, height) {
-    try {
-      if (this.isLinux) {
-        await execAsync(`wmctrl -i -r ${windowId} -e 0,-1,-1,${width},${height} 2>/dev/null`);
-        return true;
+  convertShortcutToAccelerator(shortcut) {
+    if (!shortcut) return '';
+    
+    // Clean up the shortcut string
+    let accelerator = shortcut.trim();
+    
+    // Handle single keys (no modifiers)
+    if (!accelerator.includes('+')) {
+      // Handle special single keys
+      const singleKeyMappings = {
+        'space': 'Space',
+        'enter': 'Return',
+        'return': 'Return',
+        'backspace': 'Backspace',
+        'tab': 'Tab',
+        'escape': 'Escape',
+        'esc': 'Escape',
+        'delete': 'Delete',
+        'del': 'Delete',
+        'insert': 'Insert',
+        'ins': 'Insert',
+        'home': 'Home',
+        'end': 'End',
+        'pageup': 'PageUp',
+        'pagedown': 'PageDown',
+        'up': 'Up',
+        'down': 'Down',
+        'left': 'Left',
+        'right': 'Right',
+        'plus': 'Plus',
+        'minus': 'Minus'
+      };
+      
+      const lowerKey = accelerator.toLowerCase();
+      
+      // Function keys
+      if (lowerKey.startsWith('f') && lowerKey.length <= 3) {
+        return lowerKey.toUpperCase();
       }
-    } catch (error) {
-      console.error('Error resizing window:', error);
+      
+      // Special keys
+      if (singleKeyMappings[lowerKey]) {
+        return singleKeyMappings[lowerKey];
+      }
+      
+      // Regular character keys
+      return accelerator.toUpperCase();
     }
-    return false;
+    
+    // Handle different separator formats for combinations
+    accelerator = accelerator.replace(/\s*\+\s*/g, '+');
+    
+    // Convert modifiers to Electron format
+    const modifierMappings = {
+      'ctrl': 'CommandOrControl',
+      'control': 'CommandOrControl',
+      'cmd': 'CommandOrControl',
+      'command': 'CommandOrControl',
+      'alt': 'Alt',
+      'shift': 'Shift',
+      'win': 'Super',
+      'super': 'Super',
+      'meta': 'Super'
+    };
+    
+    // Split by + and process each part
+    const parts = accelerator.split('+').map(part => part.trim().toLowerCase());
+    const processedParts = [];
+    
+    parts.forEach(part => {
+      if (modifierMappings[part]) {
+        processedParts.push(modifierMappings[part]);
+      } else {
+        // Handle special keys
+        const keyMappings = {
+          'space': 'Space',
+          'enter': 'Return',
+          'return': 'Return',
+          'backspace': 'Backspace',
+          'tab': 'Tab',
+          'escape': 'Escape',
+          'esc': 'Escape',
+          'delete': 'Delete',
+          'del': 'Delete',
+          'insert': 'Insert',
+          'ins': 'Insert',
+          'home': 'Home',
+          'end': 'End',
+          'pageup': 'PageUp',
+          'pagedown': 'PageDown',
+          'up': 'Up',
+          'down': 'Down',
+          'left': 'Left',
+          'right': 'Right',
+          'plus': 'Plus',
+          'minus': 'Minus',
+          // Function keys
+          'f1': 'F1', 'f2': 'F2', 'f3': 'F3', 'f4': 'F4',
+          'f5': 'F5', 'f6': 'F6', 'f7': 'F7', 'f8': 'F8',
+          'f9': 'F9', 'f10': 'F10', 'f11': 'F11', 'f12': 'F12',
+          // Number pad
+          'num0': 'num0', 'num1': 'num1', 'num2': 'num2', 'num3': 'num3',
+          'num4': 'num4', 'num5': 'num5', 'num6': 'num6', 'num7': 'num7',
+          'num8': 'num8', 'num9': 'num9',
+          'numadd': 'numadd',
+          'numsub': 'numsub',
+          'nummult': 'nummult',
+          'numdiv': 'numdiv',
+          'numdec': 'numdec'
+        };
+        
+        const mappedKey = keyMappings[part] || part.toUpperCase();
+        processedParts.push(mappedKey);
+      }
+    });
+    
+    return processedParts.join('+');
   }
 
-  async organizeWindows(layout = 'grid') {
-    const enabledWindows = Array.from(this.windows.values())
-      .filter(w => w.info.enabled)
-      .sort((a, b) => b.info.initiative - a.info.initiative);
+  validateShortcut(shortcut) {
+    if (!shortcut) return false;
     
-    if (enabledWindows.length === 0) return false;
-
     try {
-      // Get screen dimensions using xrandr
-      const { stdout } = await execAsync('xrandr --current | grep primary || xrandr --current | head -1');
-      const match = stdout.match(/(\d+)x(\d+)/);
+      const accelerator = this.convertShortcutToAccelerator(shortcut);
       
-      const screenWidth = match ? parseInt(match[1]) : 1920;
-      const screenHeight = match ? parseInt(match[2]) : 1080;
+      // Allow single keys and combinations
+      const validPattern = /^(CommandOrControl|Alt|Shift|Super)(\+(CommandOrControl|Alt|Shift|Super))*\+[A-Z0-9]$|^[A-Z0-9]$|^F[1-9]|F1[0-2]$|^Space$|^Return$|^Escape$|^Backspace$|^Tab$|^Delete$|^Insert$|^Home$|^End$|^PageUp$|^PageDown$|^Up$|^Down$|^Left$|^Right$/;
       
-      switch (layout) {
-        case 'grid':
-          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
-          break;
-        case 'horizontal':
-          await this.arrangeHorizontally(enabledWindows, 0, 0, screenWidth, screenHeight);
-          break;
-        case 'vertical':
-          await this.arrangeVertically(enabledWindows, 0, 0, screenWidth, screenHeight);
-          break;
-        default:
-          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
-      }
-      
-      return true;
+      return accelerator.length > 0 && !this.registeredAccelerators.has(accelerator);
     } catch (error) {
-      console.error('Error organizing windows:', error);
       return false;
     }
   }
 
-  async arrangeInGrid(windows, startX, startY, totalWidth, totalHeight) {
-    const count = windows.length;
-    const cols = Math.ceil(Math.sqrt(count));
-    const rows = Math.ceil(count / cols);
+  activateAll() {
+    this.active = true;
+    // Re-register all shortcuts
+    const shortcuts = Array.from(this.shortcuts.entries());
+    this.shortcuts.clear();
+    this.registeredAccelerators.clear();
     
-    const windowWidth = Math.floor(totalWidth / cols);
-    const windowHeight = Math.floor(totalHeight / rows);
-    
-    for (let i = 0; i < windows.length; i++) {
-      const windowData = windows[i];
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      
-      const x = startX + col * windowWidth;
-      const y = startY + row * windowHeight;
-      
-      await this.moveWindow(windowData.info.id, x, y);
-      await this.resizeWindow(windowData.info.id, windowWidth - 10, windowHeight - 10);
+    shortcuts.forEach(([windowId, info]) => {
+      this.setWindowShortcut(windowId, info.original, info.callback);
+    });
+  }
+
+  deactivateAll() {
+    this.active = false;
+    try {
+      globalShortcut.unregisterAll();
+      this.registeredAccelerators.clear();
+    } catch (error) {
+      console.error('Error deactivating shortcuts:', error);
     }
   }
 
-  async arrangeHorizontally(windows, startX, startY, totalWidth, totalHeight) {
-    const windowWidth = Math.floor(totalWidth / windows.length);
-    
-    for (let i = 0; i < windows.length; i++) {
-      const windowData = windows[i];
-      const x = startX + i * windowWidth;
-      await this.moveWindow(windowData.info.id, x, startY);
-      await this.resizeWindow(windowData.info.id, windowWidth - 10, totalHeight - 10);
+  cleanup() {
+    try {
+      globalShortcut.unregisterAll();
+      this.shortcuts.clear();
+      this.registeredAccelerators.clear();
+    } catch (error) {
+      console.error('Error cleaning up shortcuts:', error);
     }
   }
 
-  async arrangeVertically(windows, startX, startY, totalWidth, totalHeight) {
-    const windowHeight = Math.floor(totalHeight / windows.length);
+  getShortcutLabel(shortcut) {
+    if (!shortcut) return 'No shortcut';
     
-    for (let i = 0; i < windows.length; i++) {
-      const windowData = windows[i];
-      const y = startY + i * windowHeight;
-      await this.moveWindow(windowData.info.id, startX, y);
-      await this.resizeWindow(windowData.info.id, totalWidth - 10, windowHeight - 10);
+    // Handle single keys
+    if (!shortcut.includes('+')) {
+      return shortcut.toUpperCase();
+    }
+    
+    return shortcut
+      .replace(/CommandOrControl/g, 'Ctrl')
+      .replace(/\+/g, ' + ')
+      .split(' + ')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' + ');
+  }
+
+  getAllShortcuts() {
+    const shortcuts = {};
+    this.shortcuts.forEach((info, windowId) => {
+      shortcuts[windowId] = info.original;
+    });
+    return shortcuts;
+  }
+
+  saveShortcutToStore(windowId, shortcut) {
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const shortcuts = store.get('shortcuts', {});
+      shortcuts[windowId] = shortcut;
+      store.set('shortcuts', shortcuts);
+    } catch (error) {
+      console.error('Error saving shortcut to store:', error);
     }
   }
 
-  getStoredInitiative(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const initiatives = store.get('initiatives', {});
-    return initiatives[windowId] || 0;
-  }
-
-  getStoredAvatar(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const avatars = store.get('avatars', {});
-    return avatars[windowId] || 'default';
-  }
-
-  getStoredShortcut(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const shortcuts = store.get('shortcuts', {});
-    return shortcuts[windowId] || null;
-  }
-
-  getStoredEnabled(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const enabled = store.get('enabled', {});
-    return enabled[windowId] !== false;
+  removeShortcutFromStore(windowId) {
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const shortcuts = store.get('shortcuts', {});
+      delete shortcuts[windowId];
+      store.set('shortcuts', shortcuts);
+    } catch (error) {
+      console.error('Error removing shortcut from store:', error);
+    }
   }
 }
 
-module.exports = WindowManager;
+module.exports = ShortcutManager;
