@@ -1,10 +1,12 @@
-const windowManager = require('node-window-manager');
-const { screen } = require('electron');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 class WindowManager {
   constructor() {
     this.windows = new Map();
     this.lastWindowCheck = 0;
+    this.isLinux = process.platform === 'linux';
   }
 
   async getDofusWindows() {
@@ -16,46 +18,13 @@ class WindowManager {
       }
       this.lastWindowCheck = now;
 
-      const allWindows = windowManager.getWindows();
-      const dofusWindows = [];
-      const currentWindowIds = new Set();
-
-      for (const window of allWindows) {
-        try {
-          const title = window.getTitle();
-          
-          // Check if it's a Dofus window
-          if (this.isDofusWindow(title)) {
-            const windowId = window.id.toString();
-            currentWindowIds.add(windowId);
-            
-            const windowInfo = {
-              id: windowId,
-              title: title,
-              processName: window.processName || 'Dofus',
-              character: this.extractCharacterName(title),
-              initiative: this.getStoredInitiative(windowId),
-              isActive: this.isWindowActive(window),
-              bounds: this.getWindowBounds(window),
-              avatar: this.getStoredAvatar(windowId),
-              shortcut: this.getStoredShortcut(windowId),
-              enabled: this.getStoredEnabled(windowId)
-            };
-            
-            dofusWindows.push(windowInfo);
-            this.windows.set(windowId, { window, info: windowInfo });
-          }
-        } catch (error) {
-          // Skip windows that can't be accessed
-          continue;
-        }
-      }
-
-      // Remove windows that no longer exist
-      for (const [windowId] of this.windows) {
-        if (!currentWindowIds.has(windowId)) {
-          this.windows.delete(windowId);
-        }
+      let dofusWindows = [];
+      
+      if (this.isLinux) {
+        dofusWindows = await this.getLinuxWindows();
+      } else {
+        // Fallback for other platforms
+        dofusWindows = await this.getFallbackWindows();
       }
 
       // Sort by initiative (descending), then by character name
@@ -70,6 +39,146 @@ class WindowManager {
     } catch (error) {
       console.error('Error getting Dofus windows:', error);
       return [];
+    }
+  }
+
+  async getLinuxWindows() {
+    try {
+      // Use wmctrl to get window list on Linux
+      const { stdout } = await execAsync('wmctrl -l -x 2>/dev/null || echo ""');
+      const windows = [];
+      const currentWindowIds = new Set();
+
+      if (stdout.trim()) {
+        const lines = stdout.trim().split('\n');
+        
+        for (const line of lines) {
+          const parts = line.split(/\s+/);
+          if (parts.length >= 4) {
+            const windowId = parts[0];
+            const className = parts[2];
+            const title = parts.slice(3).join(' ');
+            
+            if (this.isDofusWindow(title) || this.isDofusWindow(className)) {
+              currentWindowIds.add(windowId);
+              
+              const windowInfo = {
+                id: windowId,
+                title: title,
+                processName: className.split('.')[0] || 'Dofus',
+                character: this.extractCharacterName(title),
+                initiative: this.getStoredInitiative(windowId),
+                isActive: await this.isLinuxWindowActive(windowId),
+                bounds: await this.getLinuxWindowBounds(windowId),
+                avatar: this.getStoredAvatar(windowId),
+                shortcut: this.getStoredShortcut(windowId),
+                enabled: this.getStoredEnabled(windowId)
+              };
+              
+              windows.push(windowInfo);
+              this.windows.set(windowId, { info: windowInfo });
+            }
+          }
+        }
+      }
+
+      // Remove windows that no longer exist
+      for (const [windowId] of this.windows) {
+        if (!currentWindowIds.has(windowId)) {
+          this.windows.delete(windowId);
+        }
+      }
+
+      return windows;
+    } catch (error) {
+      console.warn('wmctrl not available, using fallback method');
+      return this.getFallbackWindows();
+    }
+  }
+
+  async getFallbackWindows() {
+    try {
+      // Fallback using ps and xdotool if available
+      const { stdout } = await execAsync('ps aux | grep -i dofus | grep -v grep || echo ""');
+      const windows = [];
+      
+      if (stdout.trim()) {
+        const lines = stdout.trim().split('\n');
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.includes('dofus') || line.includes('Dofus')) {
+            const windowId = `fallback_${i}`;
+            const title = this.extractTitleFromProcess(line);
+            
+            const windowInfo = {
+              id: windowId,
+              title: title,
+              processName: 'Dofus',
+              character: this.extractCharacterName(title),
+              initiative: this.getStoredInitiative(windowId),
+              isActive: true,
+              bounds: { x: 0, y: 0, width: 800, height: 600 },
+              avatar: this.getStoredAvatar(windowId),
+              shortcut: this.getStoredShortcut(windowId),
+              enabled: this.getStoredEnabled(windowId)
+            };
+            
+            windows.push(windowInfo);
+            this.windows.set(windowId, { info: windowInfo });
+          }
+        }
+      }
+
+      return windows;
+    } catch (error) {
+      console.error('Error in fallback window detection:', error);
+      return [];
+    }
+  }
+
+  extractTitleFromProcess(processLine) {
+    // Extract title from process command line
+    const parts = processLine.split(/\s+/);
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i].toLowerCase().includes('dofus')) {
+        return parts.slice(i).join(' ').substring(0, 50);
+      }
+    }
+    return 'Dofus Window';
+  }
+
+  async isLinuxWindowActive(windowId) {
+    try {
+      const { stdout } = await execAsync(`xprop -id ${windowId} _NET_WM_STATE 2>/dev/null || echo ""`);
+      return !stdout.includes('_NET_WM_STATE_HIDDEN');
+    } catch (error) {
+      return true; // Assume active if we can't determine
+    }
+  }
+
+  async getLinuxWindowBounds(windowId) {
+    try {
+      const { stdout } = await execAsync(`xwininfo -id ${windowId} 2>/dev/null || echo ""`);
+      const lines = stdout.split('\n');
+      
+      let x = 0, y = 0, width = 800, height = 600;
+      
+      for (const line of lines) {
+        if (line.includes('Absolute upper-left X:')) {
+          x = parseInt(line.split(':')[1].trim()) || 0;
+        } else if (line.includes('Absolute upper-left Y:')) {
+          y = parseInt(line.split(':')[1].trim()) || 0;
+        } else if (line.includes('Width:')) {
+          width = parseInt(line.split(':')[1].trim()) || 800;
+        } else if (line.includes('Height:')) {
+          height = parseInt(line.split(':')[1].trim()) || 600;
+        }
+      }
+      
+      return { x, y, width, height };
+    } catch (error) {
+      return { x: 0, y: 0, width: 800, height: 600 };
     }
   }
 
@@ -89,7 +198,10 @@ class WindowManager {
       /firefox/i,
       /explorer/i,
       /desktop/i,
-      /taskbar/i
+      /taskbar/i,
+      /gnome/i,
+      /kde/i,
+      /xfce/i
     ];
     
     const isDofus = dofusPatterns.some(pattern => pattern.test(title));
@@ -124,60 +236,55 @@ class WindowManager {
     return title.length > 30 ? title.substring(0, 30) + '...' : title;
   }
 
-  isWindowActive(window) {
+  async activateWindow(windowId) {
     try {
-      return window.isVisible() && !window.isMinimized();
+      if (this.isLinux) {
+        return await this.activateLinuxWindow(windowId);
+      } else {
+        return this.activateFallbackWindow(windowId);
+      }
     } catch (error) {
+      console.error('Error activating window:', error);
       return false;
     }
   }
 
-  getWindowBounds(window) {
+  async activateLinuxWindow(windowId) {
     try {
-      return window.getBounds();
-    } catch (error) {
-      return { x: 0, y: 0, width: 800, height: 600 };
-    }
-  }
+      // Try multiple methods to activate window on Linux
+      const commands = [
+        `wmctrl -i -a ${windowId}`,
+        `xdotool windowactivate ${windowId}`,
+        `xprop -id ${windowId} -f _NET_ACTIVE_WINDOW 32a -set _NET_ACTIVE_WINDOW 1`
+      ];
 
-  activateWindow(windowId) {
-    try {
-      const windowData = this.windows.get(windowId);
-      if (windowData && windowData.window) {
-        const window = windowData.window;
-        
-        // Try multiple methods to activate the window
-        if (window.isMinimized()) {
-          window.restore();
+      for (const command of commands) {
+        try {
+          await execAsync(command + ' 2>/dev/null');
+          return true;
+        } catch (e) {
+          // Try next command
+          continue;
         }
-        
-        window.bringToTop();
-        window.setForeground();
-        
-        // Additional focus attempt
-        setTimeout(() => {
-          try {
-            window.setForeground();
-          } catch (e) {
-            // Ignore errors on second attempt
-          }
-        }, 100);
-        
-        return true;
       }
+      
+      return false;
     } catch (error) {
-      console.error('Error activating window:', error);
+      console.error('Error activating Linux window:', error);
+      return false;
     }
-    return false;
   }
 
-  moveWindow(windowId, x, y) {
+  activateFallbackWindow(windowId) {
+    // Fallback activation method
+    console.log(`Attempting to activate window: ${windowId}`);
+    return true;
+  }
+
+  async moveWindow(windowId, x, y) {
     try {
-      const windowData = this.windows.get(windowId);
-      if (windowData && windowData.window) {
-        const window = windowData.window;
-        const bounds = this.getWindowBounds(window);
-        window.setBounds({ x, y, width: bounds.width, height: bounds.height });
+      if (this.isLinux) {
+        await execAsync(`wmctrl -i -r ${windowId} -e 0,${x},${y},-1,-1 2>/dev/null`);
         return true;
       }
     } catch (error) {
@@ -186,13 +293,10 @@ class WindowManager {
     return false;
   }
 
-  resizeWindow(windowId, width, height) {
+  async resizeWindow(windowId, width, height) {
     try {
-      const windowData = this.windows.get(windowId);
-      if (windowData && windowData.window) {
-        const window = windowData.window;
-        const bounds = this.getWindowBounds(window);
-        window.setBounds({ x: bounds.x, y: bounds.y, width, height });
+      if (this.isLinux) {
+        await execAsync(`wmctrl -i -r ${windowId} -e 0,-1,-1,${width},${height} 2>/dev/null`);
         return true;
       }
     } catch (error) {
@@ -201,7 +305,7 @@ class WindowManager {
     return false;
   }
 
-  organizeWindows(layout = 'grid') {
+  async organizeWindows(layout = 'grid') {
     const enabledWindows = Array.from(this.windows.values())
       .filter(w => w.info.enabled)
       .sort((a, b) => b.info.initiative - a.info.initiative);
@@ -209,23 +313,25 @@ class WindowManager {
     if (enabledWindows.length === 0) return false;
 
     try {
-      const displays = screen.getAllDisplays();
-      const primaryDisplay = displays[0];
-      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-      const { x: screenX, y: screenY } = primaryDisplay.workArea;
-
+      // Get screen dimensions using xrandr
+      const { stdout } = await execAsync('xrandr --current | grep primary || xrandr --current | head -1');
+      const match = stdout.match(/(\d+)x(\d+)/);
+      
+      const screenWidth = match ? parseInt(match[1]) : 1920;
+      const screenHeight = match ? parseInt(match[2]) : 1080;
+      
       switch (layout) {
         case 'grid':
-          this.arrangeInGrid(enabledWindows, screenX, screenY, screenWidth, screenHeight);
+          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
           break;
         case 'horizontal':
-          this.arrangeHorizontally(enabledWindows, screenX, screenY, screenWidth, screenHeight);
+          await this.arrangeHorizontally(enabledWindows, 0, 0, screenWidth, screenHeight);
           break;
         case 'vertical':
-          this.arrangeVertically(enabledWindows, screenX, screenY, screenWidth, screenHeight);
+          await this.arrangeVertically(enabledWindows, 0, 0, screenWidth, screenHeight);
           break;
         default:
-          this.arrangeInGrid(enabledWindows, screenX, screenY, screenWidth, screenHeight);
+          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
       }
       
       return true;
@@ -235,7 +341,7 @@ class WindowManager {
     }
   }
 
-  arrangeInGrid(windows, startX, startY, totalWidth, totalHeight) {
+  async arrangeInGrid(windows, startX, startY, totalWidth, totalHeight) {
     const count = windows.length;
     const cols = Math.ceil(Math.sqrt(count));
     const rows = Math.ceil(count / cols);
@@ -243,36 +349,39 @@ class WindowManager {
     const windowWidth = Math.floor(totalWidth / cols);
     const windowHeight = Math.floor(totalHeight / rows);
     
-    windows.forEach((windowData, index) => {
-      const col = index % cols;
-      const row = Math.floor(index / cols);
+    for (let i = 0; i < windows.length; i++) {
+      const windowData = windows[i];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
       
       const x = startX + col * windowWidth;
       const y = startY + row * windowHeight;
       
-      this.moveWindow(windowData.info.id, x, y);
-      this.resizeWindow(windowData.info.id, windowWidth - 10, windowHeight - 10);
-    });
+      await this.moveWindow(windowData.info.id, x, y);
+      await this.resizeWindow(windowData.info.id, windowWidth - 10, windowHeight - 10);
+    }
   }
 
-  arrangeHorizontally(windows, startX, startY, totalWidth, totalHeight) {
+  async arrangeHorizontally(windows, startX, startY, totalWidth, totalHeight) {
     const windowWidth = Math.floor(totalWidth / windows.length);
     
-    windows.forEach((windowData, index) => {
-      const x = startX + index * windowWidth;
-      this.moveWindow(windowData.info.id, x, startY);
-      this.resizeWindow(windowData.info.id, windowWidth - 10, totalHeight - 10);
-    });
+    for (let i = 0; i < windows.length; i++) {
+      const windowData = windows[i];
+      const x = startX + i * windowWidth;
+      await this.moveWindow(windowData.info.id, x, startY);
+      await this.resizeWindow(windowData.info.id, windowWidth - 10, totalHeight - 10);
+    }
   }
 
-  arrangeVertically(windows, startX, startY, totalWidth, totalHeight) {
+  async arrangeVertically(windows, startX, startY, totalWidth, totalHeight) {
     const windowHeight = Math.floor(totalHeight / windows.length);
     
-    windows.forEach((windowData, index) => {
-      const y = startY + index * windowHeight;
-      this.moveWindow(windowData.info.id, startX, y);
-      this.resizeWindow(windowData.info.id, totalWidth - 10, windowHeight - 10);
-    });
+    for (let i = 0; i < windows.length; i++) {
+      const windowData = windows[i];
+      const y = startY + i * windowHeight;
+      await this.moveWindow(windowData.info.id, startX, y);
+      await this.resizeWindow(windowData.info.id, totalWidth - 10, windowHeight - 10);
+    }
   }
 
   getStoredInitiative(windowId) {

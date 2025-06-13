@@ -7,7 +7,8 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
-    "build-linux": "electron-builder --linux"
+    "build-linux": "electron-builder --linux",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": ["dofus", "organizer", "window-manager", "gaming"],
   "author": "Dofus Organizer Team",
@@ -17,11 +18,10 @@
     "electron-builder": "^24.6.4"
   },
   "dependencies": {
-    "node-window-manager": "^2.2.4",
-    "robotjs": "^0.6.0",
+    "@arcsine/screen-info": "^1.1.0",
+    "active-win": "^8.0.0",
     "electron-store": "^8.1.0",
-    "i18next": "^23.7.6",
-    "globalkey": "^1.0.2"
+    "i18next": "^23.7.6"
   },
   "build": {
     "appId": "com.dofus.organizer",
@@ -45,7 +45,10 @@
           "arch": ["x64"]
         }
       ],
-      "category": "Game"
+      "category": "Game",
+      "desktop": {
+        "StartupWMClass": "dofus-organizer"
+      }
     }
   }
 }
