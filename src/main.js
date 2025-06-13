@@ -18,11 +18,13 @@ class DofusOrganizer {
     this.dofusWindows = [];
     this.windowMonitorInterval = null;
     
+    console.log('DofusOrganizer: Initializing application...');
     this.initializeApp();
   }
 
   initializeApp() {
     app.whenReady().then(() => {
+      console.log('DofusOrganizer: App ready, setting up...');
       this.createTray();
       this.setupEventHandlers();
       this.loadSettings();
@@ -46,11 +48,13 @@ class DofusOrganizer {
 
   createTray() {
     const iconPath = path.join(__dirname, '../assets/icons/organizer.png');
+    console.log('DofusOrganizer: Creating tray with icon:', iconPath);
     this.tray = new Tray(iconPath);
     this.updateTrayMenu();
     
     this.tray.setToolTip('Dofus Organizer');
     this.tray.on('click', () => {
+      console.log('DofusOrganizer: Tray clicked, showing config window');
       this.showConfigWindow();
     });
 
@@ -61,12 +65,14 @@ class DofusOrganizer {
 
   updateTrayMenu() {
     const lang = this.languageManager.getCurrentLanguage();
-    const gameType = this.store.get('globalGameType', 'dofus2');
+    const gameType = this.store.get('globalGameType', 'dofus3');
     const gameTypeLabels = {
       'dofus2': 'Dofus 2',
       'dofus3': 'Dofus 3',
       'retro': 'Dofus Retro'
     };
+    
+    console.log(`DofusOrganizer: Updating tray menu with game type: ${gameType}`);
     
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -125,20 +131,28 @@ class DofusOrganizer {
   }
 
   changeGameType(gameType) {
+    console.log(`DofusOrganizer: Changing game type to ${gameType}`);
     this.store.set('globalGameType', gameType);
     this.windowManager.setGlobalGameType(gameType);
     this.updateTrayMenu();
     
     // Refresh windows to apply new detection
-    setTimeout(() => this.refreshAndSort(), 500);
+    setTimeout(() => {
+      console.log('DofusOrganizer: Refreshing windows after game type change');
+      this.refreshAndSort();
+    }, 500);
   }
 
   showConfigWindow() {
+    console.log('DofusOrganizer: showConfigWindow called');
+    
     if (this.mainWindow) {
+      console.log('DofusOrganizer: Config window already exists, focusing...');
       this.mainWindow.focus();
       return;
     }
 
+    console.log('DofusOrganizer: Creating new config window...');
     this.mainWindow = new BrowserWindow({
       width: 900,
       height: 700,
@@ -156,10 +170,26 @@ class DofusOrganizer {
     this.mainWindow.loadFile(path.join(__dirname, 'renderer/config.html'));
     
     this.mainWindow.once('ready-to-show', () => {
+      console.log('DofusOrganizer: Config window ready to show');
       this.mainWindow.show();
+      
+      // Force refresh windows when config opens
+      setTimeout(() => {
+        console.log('DofusOrganizer: Forcing window refresh for config...');
+        this.refreshAndSort();
+        
+        // Also force send current windows to the renderer
+        setTimeout(() => {
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            console.log(`DofusOrganizer: Force sending ${this.dofusWindows.length} windows to config renderer`);
+            this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
+          }
+        }, 500);
+      }, 1000);
     });
 
     this.mainWindow.on('closed', () => {
+      console.log('DofusOrganizer: Config window closed');
       this.mainWindow = null;
       this.isConfiguring = false;
       this.activateShortcuts();
@@ -269,12 +299,34 @@ class DofusOrganizer {
   }
 
   setupEventHandlers() {
+    console.log('DofusOrganizer: Setting up IPC event handlers...');
+    
     // IPC handlers for renderer processes
-    ipcMain.handle('get-dofus-windows', () => this.dofusWindows);
-    ipcMain.handle('get-language', () => this.languageManager.getCurrentLanguage());
-    ipcMain.handle('get-settings', () => this.store.store);
+    ipcMain.handle('get-dofus-windows', () => {
+      console.log(`IPC: get-dofus-windows called, returning ${this.dofusWindows.length} windows`);
+      console.log(`IPC: Windows data:`, this.dofusWindows.map(w => ({ 
+        id: w.id, 
+        title: w.title, 
+        character: w.character,
+        enabled: w.enabled 
+      })));
+      return this.dofusWindows;
+    });
+    
+    ipcMain.handle('get-language', () => {
+      const lang = this.languageManager.getCurrentLanguage();
+      console.log('IPC: get-language called, returning:', Object.keys(lang).length, 'keys');
+      return lang;
+    });
+    
+    ipcMain.handle('get-settings', () => {
+      const settings = this.store.store;
+      console.log('IPC: get-settings called, returning:', Object.keys(settings).length, 'settings');
+      return settings;
+    });
     
     ipcMain.handle('save-settings', (event, settings) => {
+      console.log('IPC: save-settings called with:', Object.keys(settings));
       Object.keys(settings).forEach(key => {
         this.store.set(key, settings[key]);
       });
@@ -289,48 +341,63 @@ class DofusOrganizer {
     });
     
     ipcMain.handle('activate-window', (event, windowId) => {
+      console.log(`IPC: activate-window called for: ${windowId}`);
       return this.windowManager.activateWindow(windowId);
     });
     
-    ipcMain.handle('refresh-windows', () => this.refreshAndSort());
+    ipcMain.handle('refresh-windows', () => {
+      console.log('IPC: refresh-windows called');
+      return this.refreshAndSort();
+    });
     
     ipcMain.handle('set-shortcut', (event, windowId, shortcut) => {
+      console.log(`IPC: set-shortcut called for ${windowId}: ${shortcut}`);
       return this.shortcutManager.setWindowShortcut(windowId, shortcut, () => {
         this.windowManager.activateWindow(windowId);
       });
     });
     
     ipcMain.handle('remove-shortcut', (event, windowId) => {
+      console.log(`IPC: remove-shortcut called for: ${windowId}`);
       this.shortcutManager.removeWindowShortcut(windowId);
     });
 
     ipcMain.handle('set-game-type', (event, gameType) => {
+      console.log(`IPC: set-game-type called: ${gameType}`);
       this.changeGameType(gameType);
     });
 
     ipcMain.handle('organize-windows', (event, layout) => {
+      console.log(`IPC: organize-windows called with layout: ${layout}`);
       return this.windowManager.organizeWindows(layout);
     });
 
     ipcMain.on('show-config', () => {
+      console.log('IPC: show-config called');
       this.showConfigWindow();
     });
 
     ipcMain.handle('close-app', () => {
+      console.log('IPC: close-app called');
       this.quit();
     });
   }
 
   loadSettings() {
+    console.log('DofusOrganizer: Loading settings...');
+    
     const language = this.store.get('language', 'FR');
+    console.log(`DofusOrganizer: Setting language to ${language}`);
     this.languageManager.setLanguage(language);
     
-    // Load and set global game type
-    const gameType = this.store.get('globalGameType', 'dofus2');
+    // Load and set global game type - CHANGED: default to dofus3
+    const gameType = this.store.get('globalGameType', 'dofus3');
+    console.log(`DofusOrganizer: Setting initial game type to ${gameType}`);
     this.windowManager.setGlobalGameType(gameType);
     
     // Load and register shortcuts
     const shortcuts = this.store.get('shortcuts', {});
+    console.log(`DofusOrganizer: Loading ${Object.keys(shortcuts).length} shortcuts`);
     Object.keys(shortcuts).forEach(windowId => {
       this.shortcutManager.setWindowShortcut(windowId, shortcuts[windowId], () => {
         this.windowManager.activateWindow(windowId);
@@ -339,11 +406,13 @@ class DofusOrganizer {
   }
 
   startWindowMonitoring() {
+    console.log('DofusOrganizer: Starting window monitoring...');
     this.refreshAndSort();
     
     // Monitor windows every 3 seconds
     this.windowMonitorInterval = setInterval(() => {
       if (!this.isConfiguring) {
+        console.log('DofusOrganizer: Periodic window refresh...');
         this.refreshAndSort();
       }
     }, 3000);
@@ -351,19 +420,29 @@ class DofusOrganizer {
 
   async refreshAndSort() {
     try {
+      console.log('DofusOrganizer: refreshAndSort called');
       const windows = await this.windowManager.getDofusWindows();
+      console.log(`DofusOrganizer: WindowManager returned ${windows.length} windows`);
+      
       const hasChanged = JSON.stringify(windows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive }))) !== 
                         JSON.stringify(this.dofusWindows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive })));
       
-      if (hasChanged) {
+      // FORCE UPDATE: Always update the array to ensure IPC gets fresh data
+      const forceUpdate = this.dofusWindows.length === 0 && windows.length > 0;
+      
+      if (hasChanged || this.dofusWindows.length !== windows.length || forceUpdate) {
+        console.log(`DofusOrganizer: Window list updating... (hasChanged: ${hasChanged}, lengthDiff: ${this.dofusWindows.length !== windows.length}, forceUpdate: ${forceUpdate})`);
         this.dofusWindows = windows;
+        console.log(`DofusOrganizer: Updated dofusWindows array, now has ${this.dofusWindows.length} windows`);
         this.updateTrayTooltip();
         
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          console.log('DofusOrganizer: Sending windows-updated to config window');
           this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
         }
         
         if (this.dockWindow && !this.dockWindow.isDestroyed()) {
+          console.log('DofusOrganizer: Sending windows-updated to dock window');
           this.dockWindow.webContents.send('windows-updated', this.dofusWindows);
         }
         
@@ -378,9 +457,13 @@ class DofusOrganizer {
             this.hideDockWindow();
           }
         }
+      } else {
+        console.log(`DofusOrganizer: No changes in window list (current: ${this.dofusWindows.length}, new: ${windows.length})`);
+        // But still update the array to ensure consistency
+        this.dofusWindows = windows;
       }
     } catch (error) {
-      console.error('Error refreshing windows:', error);
+      console.error('DofusOrganizer: Error refreshing windows:', error);
     }
   }
 
@@ -388,7 +471,7 @@ class DofusOrganizer {
     const lang = this.languageManager.getCurrentLanguage();
     const windowCount = this.dofusWindows.length;
     const enabledCount = this.dofusWindows.filter(w => w.enabled).length;
-    const gameType = this.store.get('globalGameType', 'dofus2');
+    const gameType = this.store.get('globalGameType', 'dofus3');
     const gameTypeLabels = {
       'dofus2': 'Dofus 2',
       'dofus3': 'Dofus 3',
@@ -408,10 +491,12 @@ class DofusOrganizer {
       tooltip += ` (${enabledCount} enabled)`;
     }
     
+    console.log(`DofusOrganizer: Updating tray tooltip: ${tooltip}`);
     this.tray.setToolTip(tooltip);
   }
 
   changeLanguage(langCode) {
+    console.log(`DofusOrganizer: Changing language to ${langCode}`);
     this.languageManager.setLanguage(langCode);
     this.store.set('language', langCode);
     this.updateTrayMenu();
@@ -426,14 +511,17 @@ class DofusOrganizer {
   }
 
   activateShortcuts() {
+    console.log('DofusOrganizer: Activating shortcuts');
     this.shortcutManager.activateAll();
   }
 
   deactivateShortcuts() {
+    console.log('DofusOrganizer: Deactivating shortcuts');
     this.shortcutManager.deactivateAll();
   }
 
   cleanup() {
+    console.log('DofusOrganizer: Cleaning up...');
     if (this.windowMonitorInterval) {
       clearInterval(this.windowMonitorInterval);
     }
@@ -441,6 +529,7 @@ class DofusOrganizer {
   }
 
   quit() {
+    console.log('DofusOrganizer: Quitting application...');
     this.cleanup();
     if (this.dockWindow && !this.dockWindow.isDestroyed()) this.dockWindow.close();
     if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.close();
@@ -449,4 +538,5 @@ class DofusOrganizer {
 }
 
 // Initialize the application
+console.log('Starting Dofus Organizer...');
 new DofusOrganizer();

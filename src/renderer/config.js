@@ -1,487 +1,244 @@
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
+const { ipcRenderer } = require('electron');
 
-class WindowManager {
-  constructor() {
-    this.windows = new Map();
-    this.lastWindowCheck = 0;
-    this.isLinux = process.platform === 'linux';
-    this.availableAvatars = Array.from({length: 20}, (_, i) => (i + 1).toString());
-    this.gameType = this.getGlobalGameType(); // Global game type setting
-  }
+console.log('Config.js: Loading...');
 
-  getGlobalGameType() {
-    const Store = require('electron-store');
-    const store = new Store();
-    return store.get('globalGameType', 'dofus2');
-  }
-
-  setGlobalGameType(gameType) {
-    const Store = require('electron-store');
-    const store = new Store();
-    store.set('globalGameType', gameType);
-    this.gameType = gameType;
-  }
-
-  async getDofusWindows() {
-    try {
-      // Throttle window checks to avoid performance issues
-      const now = Date.now();
-      if (now - this.lastWindowCheck < 1000) {
-        return Array.from(this.windows.values()).map(w => w.info);
-      }
-      this.lastWindowCheck = now;
-
-      let dofusWindows = [];
-      
-      if (this.isLinux) {
-        dofusWindows = await this.getLinuxWindows();
-      } else {
-        // Fallback for other platforms
-        dofusWindows = await this.getFallbackWindows();
-      }
-
-      // Sort by initiative (descending), then by character name
-      dofusWindows.sort((a, b) => {
-        if (b.initiative !== a.initiative) {
-          return b.initiative - a.initiative;
-        }
-        return a.character.localeCompare(b.character);
-      });
-      
-      return dofusWindows;
-    } catch (error) {
-      console.error('Error getting Dofus windows:', error);
-      return [];
-    }
-  }
-
-  async getLinuxWindows() {
-    try {
-      // Use wmctrl to get window list on Linux
-      const { stdout } = await execAsync('wmctrl -l -x 2>/dev/null || echo ""');
-      const windows = [];
-      const currentWindowIds = new Set();
-
-      if (stdout.trim()) {
-        const lines = stdout.trim().split('\n');
+class ConfigRenderer {
+    constructor() {
+        this.windows = [];
+        this.language = {};
+        this.settings = {};
         
-        for (const line of lines) {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 4) {
-            const windowId = parts[0];
-            const className = parts[2];
-            const title = parts.slice(3).join(' ');
-            
-            if (this.isDofusWindow(title) || this.isDofusWindow(className)) {
-              currentWindowIds.add(windowId);
-              
-              const windowInfo = {
-                id: windowId,
-                title: title,
-                processName: className.split('.')[0] || 'Dofus',
-                character: this.extractCharacterName(title),
-                customName: this.getStoredCustomName(windowId),
-                initiative: this.getStoredInitiative(windowId),
-                isActive: await this.isLinuxWindowActive(windowId),
-                bounds: await this.getLinuxWindowBounds(windowId),
-                avatar: this.getStoredAvatar(windowId),
-                shortcut: this.getStoredShortcut(windowId),
-                enabled: this.getStoredEnabled(windowId)
-              };
-              
-              windows.push(windowInfo);
-              this.windows.set(windowId, { info: windowInfo });
-            }
-          }
-        }
-      }
-
-      // Remove windows that no longer exist
-      for (const [windowId] of this.windows) {
-        if (!currentWindowIds.has(windowId)) {
-          this.windows.delete(windowId);
-        }
-      }
-
-      return windows;
-    } catch (error) {
-      console.warn('wmctrl not available, using fallback method');
-      return this.getFallbackWindows();
-    }
-  }
-
-  async getFallbackWindows() {
-    try {
-      // Fallback using ps and xdotool if available
-      const { stdout } = await execAsync('ps aux | grep -i dofus | grep -v grep || echo ""');
-      const windows = [];
-      
-      if (stdout.trim()) {
-        const lines = stdout.trim().split('\n');
+        this.initializeElements();
+        this.setupEventListeners();
+        this.loadData();
         
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.includes('dofus') || line.includes('Dofus')) {
-            const windowId = `fallback_${i}`;
-            const title = this.extractTitleFromProcess(line);
-            
-            const windowInfo = {
-              id: windowId,
-              title: title,
-              processName: 'Dofus',
-              character: this.extractCharacterName(title),
-              customName: this.getStoredCustomName(windowId),
-              initiative: this.getStoredInitiative(windowId),
-              isActive: true,
-              bounds: { x: 0, y: 0, width: 800, height: 600 },
-              avatar: this.getStoredAvatar(windowId),
-              shortcut: this.getStoredShortcut(windowId),
-              enabled: this.getStoredEnabled(windowId)
-            };
-            
-            windows.push(windowInfo);
-            this.windows.set(windowId, { info: windowInfo });
-          }
+        console.log('Config.js: Initialized');
+    }
+
+    initializeElements() {
+        this.elements = {
+            windowsList: document.getElementById('windows-list'),
+            noWindows: document.getElementById('no-windows'),
+            refreshBtn: document.getElementById('refresh-btn'),
+            closeBtn: document.getElementById('close-btn')
+        };
+        
+        console.log('Config.js: Elements found:', Object.keys(this.elements).filter(k => this.elements[k]));
+    }
+
+    setupEventListeners() {
+        // IPC listeners
+        ipcRenderer.on('windows-updated', (event, windows) => {
+            console.log('Config.js: Received windows-updated:', windows);
+            this.windows = windows;
+            this.renderWindows();
+        });
+
+        ipcRenderer.on('language-changed', (event, language) => {
+            console.log('Config.js: Received language-changed');
+            this.language = language;
+            this.updateLanguage();
+        });
+
+        // Button listeners
+        if (this.elements.refreshBtn) {
+            this.elements.refreshBtn.addEventListener('click', () => {
+                console.log('Config.js: Refresh button clicked');
+                this.refreshWindows();
+            });
         }
-      }
 
-      return windows;
-    } catch (error) {
-      console.error('Error in fallback window detection:', error);
-      return [];
-    }
-  }
-
-  extractTitleFromProcess(processLine) {
-    // Extract title from process command line
-    const parts = processLine.split(/\s+/);
-    for (let i = 0; i < parts.length; i++) {
-      if (parts[i].toLowerCase().includes('dofus')) {
-        return parts.slice(i).join(' ').substring(0, 50);
-      }
-    }
-    return 'Dofus Window';
-  }
-
-  async isLinuxWindowActive(windowId) {
-    try {
-      const { stdout } = await execAsync(`xprop -id ${windowId} _NET_WM_STATE 2>/dev/null || echo ""`);
-      return !stdout.includes('_NET_WM_STATE_HIDDEN');
-    } catch (error) {
-      return true; // Assume active if we can't determine
-    }
-  }
-
-  async getLinuxWindowBounds(windowId) {
-    try {
-      const { stdout } = await execAsync(`xwininfo -id ${windowId} 2>/dev/null || echo ""`);
-      const lines = stdout.split('\n');
-      
-      let x = 0, y = 0, width = 800, height = 600;
-      
-      for (const line of lines) {
-        if (line.includes('Absolute upper-left X:')) {
-          x = parseInt(line.split(':')[1].trim()) || 0;
-        } else if (line.includes('Absolute upper-left Y:')) {
-          y = parseInt(line.split(':')[1].trim()) || 0;
-        } else if (line.includes('Width:')) {
-          width = parseInt(line.split(':')[1].trim()) || 800;
-        } else if (line.includes('Height:')) {
-          height = parseInt(line.split(':')[1].trim()) || 600;
+        if (this.elements.closeBtn) {
+            this.elements.closeBtn.addEventListener('click', () => {
+                console.log('Config.js: Close button clicked');
+                window.close();
+            });
         }
-      }
-      
-      return { x, y, width, height };
-    } catch (error) {
-      return { x: 0, y: 0, width: 800, height: 600 };
     }
-  }
 
-  isDofusWindow(title) {
-    if (!title || typeof title !== 'string') return false;
-    
-    // Different patterns based on game type
-    let dofusPatterns = [];
-    
-    switch (this.gameType) {
-      case 'dofus2':
-        dofusPatterns = [
-          /dofus(?!\s*retro)/i,  // Dofus but not Dofus Retro
-          /ankama(?!\s*retro)/i
-        ];
-        break;
-      case 'dofus3':
-        dofusPatterns = [
-          /dofus\s*3/i,
-          /dofus.*unity/i,
-          /dofus.*beta/i
-        ];
-        break;
-      case 'retro':
-        dofusPatterns = [
-          /dofus\s*retro/i,
-          /retro/i,
-          /dofus.*1\.29/i
-        ];
-        break;
-      default:
-        // Detect all types if no specific type set
-        dofusPatterns = [
-          /dofus/i,
-          /ankama/i,
-          /retro/i,
-          /wakfu/i
-        ];
-    }
-    
-    // Exclude system windows and browsers
-    const excludePatterns = [
-      /chrome/i,
-      /firefox/i,
-      /explorer/i,
-      /desktop/i,
-      /taskbar/i,
-      /gnome/i,
-      /kde/i,
-      /xfce/i
-    ];
-    
-    const isDofus = dofusPatterns.some(pattern => pattern.test(title));
-    const isExcluded = excludePatterns.some(pattern => pattern.test(title));
-    
-    return isDofus && !isExcluded;
-  }
-
-  extractCharacterName(title) {
-    if (!title) return 'Unknown';
-    
-    // Try to extract character name from window title
-    const patterns = [
-      /dofus\s*-\s*(.+?)(?:\s*\(|$)/i,
-      /(.+?)\s*-\s*dofus/i,
-      /(.+?)(?:\s*-\s*ankama)?$/i
-    ];
-    
-    for (const pattern of patterns) {
-      const match = title.match(pattern);
-      if (match && match[1]) {
-        let name = match[1].trim();
-        // Clean up common suffixes
-        name = name.replace(/\s*\(.*\)$/, '');
-        name = name.replace(/\s*-.*$/, '');
-        if (name.length > 0 && name.length < 50) {
-          return name;
-        }
-      }
-    }
-    
-    return title.length > 30 ? title.substring(0, 30) + '...' : title;
-  }
-
-  async activateWindow(windowId) {
-    try {
-      if (this.isLinux) {
-        return await this.activateLinuxWindow(windowId);
-      } else {
-        return this.activateFallbackWindow(windowId);
-      }
-    } catch (error) {
-      console.error('Error activating window:', error);
-      return false;
-    }
-  }
-
-  async activateLinuxWindow(windowId) {
-    try {
-      // Try multiple methods to activate window on Linux
-      const commands = [
-        `wmctrl -i -a ${windowId}`,
-        `xdotool windowactivate ${windowId}`,
-        `xprop -id ${windowId} -f _NET_ACTIVE_WINDOW 32a -set _NET_ACTIVE_WINDOW 1`
-      ];
-
-      for (const command of commands) {
+    async loadData() {
         try {
-          await execAsync(command + ' 2>/dev/null');
-          return true;
-        } catch (e) {
-          // Try next command
-          continue;
+            console.log('Config.js: Loading initial data...');
+            
+            this.windows = await ipcRenderer.invoke('get-dofus-windows');
+            console.log('Config.js: Loaded windows:', this.windows);
+            
+            this.language = await ipcRenderer.invoke('get-language');
+            console.log('Config.js: Loaded language with keys:', Object.keys(this.language));
+            
+            this.settings = await ipcRenderer.invoke('get-settings');
+            console.log('Config.js: Loaded settings with keys:', Object.keys(this.settings));
+            
+            this.renderWindows();
+            this.updateLanguage();
+            
+        } catch (error) {
+            console.error('Config.js: Error loading data:', error);
         }
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error activating Linux window:', error);
-      return false;
     }
-  }
 
-  activateFallbackWindow(windowId) {
-    // Fallback activation method
-    console.log(`Attempting to activate window: ${windowId}`);
-    return true;
-  }
+    renderWindows() {
+        console.log(`Config.js: Rendering ${this.windows.length} windows`);
+        
+        if (!this.elements.windowsList || !this.elements.noWindows) {
+            console.error('Config.js: Missing DOM elements for rendering');
+            return;
+        }
 
-  async moveWindow(windowId, x, y) {
-    try {
-      if (this.isLinux) {
-        await execAsync(`wmctrl -i -r ${windowId} -e 0,${x},${y},-1,-1 2>/dev/null`);
-        return true;
-      }
-    } catch (error) {
-      console.error('Error moving window:', error);
+        if (this.windows.length === 0) {
+            this.elements.noWindows.style.display = 'block';
+            this.elements.windowsList.style.display = 'none';
+            this.elements.windowsList.innerHTML = '';
+            return;
+        }
+
+        this.elements.noWindows.style.display = 'none';
+        this.elements.windowsList.style.display = 'grid';
+
+        let windowsHTML = '';
+        
+        this.windows.forEach((window, index) => {
+            const displayName = window.customName || window.character || 'Unknown';
+            const shortcutText = window.shortcut || 'No shortcut';
+            const avatarSrc = `../../assets/avatars/${window.avatar || '1'}.jpg`;
+            
+            windowsHTML += `
+                <div class="window-item" data-window-id="${window.id}">
+                    <div class="window-header">
+                        <div class="window-avatar" onclick="configRenderer.cycleAvatar('${window.id}')">
+                            <img src="${avatarSrc}" alt="Avatar" onerror="this.src='../../assets/avatars/1.jpg'">
+                        </div>
+                        <div class="window-info">
+                            <div class="window-title">${this.escapeHtml(window.title)}</div>
+                            <div class="window-character">${this.escapeHtml(displayName)}</div>
+                        </div>
+                        <div class="window-controls">
+                            <button class="btn btn-primary" onclick="configRenderer.activateWindow('${window.id}')">
+                                Activate
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="window-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Initiative</div>
+                            <div class="detail-value">
+                                <input type="number" 
+                                       class="initiative-input" 
+                                       value="${window.initiative || 0}"
+                                       onchange="configRenderer.updateInitiative('${window.id}', this.value)">
+                            </div>
+                        </div>
+                        
+                        <div class="detail-item">
+                            <div class="detail-label">Shortcut</div>
+                            <div class="detail-value">
+                                <div class="shortcut-display" onclick="configRenderer.setShortcut('${window.id}')">
+                                    ${this.escapeHtml(shortcutText)}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="detail-item">
+                            <div class="detail-label">Enabled</div>
+                            <div class="detail-value">
+                                <div class="toggle-switch ${window.enabled ? 'active' : ''}" 
+                                     onclick="configRenderer.toggleWindow('${window.id}')"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        this.elements.windowsList.innerHTML = windowsHTML;
+        console.log('Config.js: Windows rendered successfully');
     }
-    return false;
-  }
 
-  async resizeWindow(windowId, width, height) {
-    try {
-      if (this.isLinux) {
-        await execAsync(`wmctrl -i -r ${windowId} -e 0,-1,-1,${width},${height} 2>/dev/null`);
-        return true;
-      }
-    } catch (error) {
-      console.error('Error resizing window:', error);
+    updateLanguage() {
+        // Basic language update - extend as needed
+        if (this.language.displayGUI_nowindow) {
+            const noWindowsText = document.getElementById('no-windows-text');
+            if (noWindowsText) {
+                noWindowsText.textContent = this.language.displayGUI_nowindow;
+            }
+        }
     }
-    return false;
-  }
 
-  async organizeWindows(layout = 'grid') {
-    const enabledWindows = Array.from(this.windows.values())
-      .filter(w => w.info.enabled)
-      .sort((a, b) => b.info.initiative - a.info.initiative);
-    
-    if (enabledWindows.length === 0) return false;
-
-    try {
-      // Get screen dimensions using xrandr
-      const { stdout } = await execAsync('xrandr --current | grep primary || xrandr --current | head -1');
-      const match = stdout.match(/(\d+)x(\d+)/);
-      
-      const screenWidth = match ? parseInt(match[1]) : 1920;
-      const screenHeight = match ? parseInt(match[2]) : 1080;
-      
-      switch (layout) {
-        case 'grid':
-          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
-          break;
-        case 'horizontal':
-          await this.arrangeHorizontally(enabledWindows, 0, 0, screenWidth, screenHeight);
-          break;
-        case 'vertical':
-          await this.arrangeVertically(enabledWindows, 0, 0, screenWidth, screenHeight);
-          break;
-        default:
-          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error organizing windows:', error);
-      return false;
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
-  }
 
-  async arrangeInGrid(windows, startX, startY, totalWidth, totalHeight) {
-    const count = windows.length;
-    const cols = Math.ceil(Math.sqrt(count));
-    const rows = Math.ceil(count / cols);
-    
-    const windowWidth = Math.floor(totalWidth / cols);
-    const windowHeight = Math.floor(totalHeight / rows);
-    
-    for (let i = 0; i < windows.length; i++) {
-      const windowData = windows[i];
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      
-      const x = startX + col * windowWidth;
-      const y = startY + row * windowHeight;
-      
-      await this.moveWindow(windowData.info.id, x, y);
-      await this.resizeWindow(windowData.info.id, windowWidth - 10, windowHeight - 10);
+    async refreshWindows() {
+        try {
+            console.log('Config.js: Refreshing windows...');
+            await ipcRenderer.invoke('refresh-windows');
+        } catch (error) {
+            console.error('Config.js: Error refreshing windows:', error);
+        }
     }
-  }
 
-  async arrangeHorizontally(windows, startX, startY, totalWidth, totalHeight) {
-    const windowWidth = Math.floor(totalWidth / windows.length);
-    
-    for (let i = 0; i < windows.length; i++) {
-      const windowData = windows[i];
-      const x = startX + i * windowWidth;
-      await this.moveWindow(windowData.info.id, x, startY);
-      await this.resizeWindow(windowData.info.id, windowWidth - 10, totalHeight - 10);
+    async activateWindow(windowId) {
+        try {
+            console.log(`Config.js: Activating window ${windowId}`);
+            await ipcRenderer.invoke('activate-window', windowId);
+        } catch (error) {
+            console.error('Config.js: Error activating window:', error);
+        }
     }
-  }
 
-  async arrangeVertically(windows, startX, startY, totalWidth, totalHeight) {
-    const windowHeight = Math.floor(totalHeight / windows.length);
-    
-    for (let i = 0; i < windows.length; i++) {
-      const windowData = windows[i];
-      const y = startY + i * windowHeight;
-      await this.moveWindow(windowData.info.id, startX, y);
-      await this.resizeWindow(windowData.info.id, totalWidth - 10, windowHeight - 10);
+    async updateInitiative(windowId, initiative) {
+        try {
+            console.log(`Config.js: Updating initiative for ${windowId}: ${initiative}`);
+            const settings = { [`initiatives.${windowId}`]: parseInt(initiative) || 0 };
+            await ipcRenderer.invoke('save-settings', settings);
+        } catch (error) {
+            console.error('Config.js: Error updating initiative:', error);
+        }
     }
-  }
 
-  // Storage methods
-  getStoredCustomName(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const customNames = store.get('customNames', {});
-    return customNames[windowId] || null;
-  }
-
-  getStoredInitiative(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const initiatives = store.get('initiatives', {});
-    return initiatives[windowId] || 0;
-  }
-
-  // Corrected avatar management
-  getStoredAvatar(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const avatars = store.get('avatars', {});
-    const storedAvatar = avatars[windowId];
-    
-    // Ensure the avatar is valid (1-20)
-    if (storedAvatar && this.availableAvatars.includes(storedAvatar.toString())) {
-      return storedAvatar.toString();
+    async toggleWindow(windowId) {
+        try {
+            console.log(`Config.js: Toggling window ${windowId}`);
+            const window = this.windows.find(w => w.id === windowId);
+            if (window) {
+                const settings = { [`enabled.${windowId}`]: !window.enabled };
+                await ipcRenderer.invoke('save-settings', settings);
+                window.enabled = !window.enabled;
+                this.renderWindows();
+            }
+        } catch (error) {
+            console.error('Config.js: Error toggling window:', error);
+        }
     }
-    
-    // Return a random avatar if none is stored
-    return this.getRandomAvatar();
-  }
 
-  getRandomAvatar() {
-    return this.availableAvatars[Math.floor(Math.random() * this.availableAvatars.length)];
-  }
+    setShortcut(windowId) {
+        console.log(`Config.js: Setting shortcut for ${windowId}`);
+        // TODO: Implement shortcut modal
+        alert('Shortcut setting not implemented yet');
+    }
 
-  getNextAvatar(currentAvatar) {
-    const currentIndex = this.availableAvatars.indexOf(currentAvatar.toString());
-    const nextIndex = (currentIndex + 1) % this.availableAvatars.length;
-    return this.availableAvatars[nextIndex];
-  }
-
-  getStoredShortcut(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const shortcuts = store.get('shortcuts', {});
-    return shortcuts[windowId] || null;
-  }
-
-  getStoredEnabled(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const enabled = store.get('enabled', {});
-    return enabled[windowId] !== false;
-  }
+    cycleAvatar(windowId) {
+        console.log(`Config.js: Cycling avatar for ${windowId}`);
+        // TODO: Implement avatar cycling
+        alert('Avatar cycling not implemented yet');
+    }
 }
 
-module.exports = WindowManager;
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('Config.js: DOM ready, initializing...');
+        window.configRenderer = new ConfigRenderer();
+    });
+} else {
+    console.log('Config.js: DOM already ready, initializing...');
+    window.configRenderer = new ConfigRenderer();
+}
+
+// Debug: Make IPC available globally
+window.ipc = ipcRenderer;
+console.log('Config.js: File loaded completely');
