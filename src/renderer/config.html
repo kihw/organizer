@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dofus Organizer - Configuration</title>
+    <link rel="stylesheet" href="config.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 id="title">Dofus Organizer</h1>
+            <div class="header-controls">
+                <button id="refresh-btn" class="btn btn-primary" title="Refresh windows">
+                    <img src="../../assets/icons/refresh.png" alt="Refresh">
+                </button>
+                <button id="language-btn" class="btn btn-secondary" title="Change language">
+                    <img src="../../assets/icons/language.png" alt="Language">
+                </button>
+                <button id="close-btn" class="btn btn-close" title="Close configuration">×</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div id="no-windows" class="no-windows" style="display: none;">
+                <p id="no-windows-text">No Dofus windows detected. Click Refresh to scan for windows.</p>
+            </div>
+
+            <div id="windows-list" class="windows-list">
+                <!-- Windows will be populated here -->
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div class="dock-settings">
+                <label>
+                    <input type="checkbox" id="dock-enabled"> 
+                    <span id="dock-label">Enable navigation dock</span>
+                </label>
+                <select id="dock-position">
+                    <option value="NW">Top Left</option>
+                    <option value="NE">Top Right</option>
+                    <option value="SW">Bottom Left</option>
+                    <option value="SE" selected>Bottom Right</option>
+                    <option value="N">Top (Horizontal)</option>
+                    <option value="S">Bottom (Horizontal)</option>
+                </select>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Shortcut capture modal -->
+    <div id="shortcut-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3 id="shortcut-title">Set Shortcut</h3>
+            <p id="shortcut-instruction">Press the key combination you want to use:</p>
+            <div id="shortcut-display" class="shortcut-display">No shortcut</div>
+            <div class="modal-buttons">
+                <button id="shortcut-save" class="btn btn-primary">Save</button>
+                <button id="shortcut-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="shortcut-remove" class="btn btn-danger">Remove</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+</body>
+</html>
