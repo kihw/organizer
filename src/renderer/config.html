@@ -9,16 +9,23 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1 id="title">Dofus Organizer</h1>
+            <h1 id="title">Dofus Organizer - Configuration</h1>
             <div class="header-controls">
                 <button id="refresh-btn" class="btn btn-primary" title="Refresh windows">
-                    <img src="../../assets/icons/refresh.png" alt="Refresh">
+                    <img src="../../assets/icons/refresh.png" alt="Refresh" onerror="this.style.display='none'">
+                    <span>Refresh</span>
                 </button>
                 <button id="game-type-btn" class="btn btn-secondary" title="Change game type">
-                    <img src="../../assets/icons/game.png" alt="Game Type">
+                    <img src="../../assets/icons/game.png" alt="Game Type" onerror="this.style.display='none'">
+                    <span>Game Type</span>
                 </button>
                 <button id="language-btn" class="btn btn-secondary" title="Change language">
-                    <img src="../../assets/icons/language.png" alt="Language">
+                    <img src="../../assets/icons/language.png" alt="Language" onerror="this.style.display='none'">
+                    <span>Language</span>
+                </button>
+                <button id="organize-btn" class="btn btn-secondary" title="Organize windows">
+                    <img src="../../assets/icons/organize.png" alt="Organize" onerror="this.style.display='none'">
+                    <span>Organize</span>
                 </button>
                 <button id="close-btn" class="btn btn-close" title="Close configuration">×</button>
             </div>
@@ -26,7 +33,12 @@
 
         <main class="main-content">
             <div id="no-windows" class="no-windows" style="display: none;">
-                <p id="no-windows-text">No Dofus windows detected. Click Refresh to scan for windows.</p>
+                <div class="no-windows-icon">🎮</div>
+                <h3>No Dofus Windows Detected</h3>
+                <p id="no-windows-text">No Dofus windows detected. Make sure Dofus is running and click Refresh to scan for windows.</p>
+                <button class="btn btn-primary" onclick="configRenderer.refreshWindows()">
+                    <span>🔄 Refresh Now</span>
+                </button>
             </div>
 
             <div id="windows-list" class="windows-list">
@@ -35,19 +47,30 @@
         </main>
 
         <footer class="footer">
-            <div class="dock-settings">
-                <label>
-                    <input type="checkbox" id="dock-enabled"> 
-                    <span id="dock-label">Enable navigation dock</span>
-                </label>
-                <select id="dock-position">
-                    <option value="NW">Top Left</option>
-                    <option value="NE">Top Right</option>
-                    <option value="SW">Bottom Left</option>
-                    <option value="SE" selected>Bottom Right</option>
-                    <option value="N">Top (Horizontal)</option>
-                    <option value="S">Bottom (Horizontal)</option>
-                </select>
+            <div class="footer-content">
+                <div class="dock-settings">
+                    <label class="dock-toggle">
+                        <input type="checkbox" id="dock-enabled"> 
+                        <span class="toggle-slider"></span>
+                        <span id="dock-label">Enable navigation dock</span>
+                    </label>
+                    
+                    <div class="dock-position-group">
+                        <label for="dock-position">Position:</label>
+                        <select id="dock-position" class="dock-position-select">
+                            <option value="NW">Top Left</option>
+                            <option value="NE">Top Right</option>
+                            <option value="SW">Bottom Left</option>
+                            <option value="SE" selected>Bottom Right</option>
+                            <option value="N">Top (Horizontal)</option>
+                            <option value="S">Bottom (Horizontal)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="footer-stats">
+                    <span id="window-count">0 windows detected</span>
+                </div>
             </div>
         </footer>
     </div>
@@ -55,13 +78,21 @@
     <!-- Shortcut capture modal -->
     <div id="shortcut-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h3 id="shortcut-title">Set Shortcut</h3>
-            <p id="shortcut-instruction">Press the key combination you want to use:</p>
-            <div id="shortcut-display" class="shortcut-display">No shortcut</div>
-            <div class="modal-buttons">
-                <button id="shortcut-save" class="btn btn-primary">Save</button>
+            <div class="modal-header">
+                <h3 id="shortcut-title">Set Keyboard Shortcut</h3>
+                <button class="modal-close" onclick="configRenderer.closeShortcutModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="shortcut-instruction">Press the key combination you want to use for this window:</p>
+                <div id="shortcut-display" class="shortcut-display-modal">No shortcut</div>
+                <div class="shortcut-examples">
+                    <p>Examples: <code>Ctrl+1</code>, <code>Alt+F1</code>, <code>Shift+Q</code></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="shortcut-save" class="btn btn-primary">Save Shortcut</button>
                 <button id="shortcut-cancel" class="btn btn-secondary">Cancel</button>
-                <button id="shortcut-remove" class="btn btn-danger">Remove</button>
+                <button id="shortcut-remove" class="btn btn-danger">Remove Shortcut</button>
             </div>
         </div>
     </div>
@@ -69,16 +100,160 @@
     <!-- Game type modal -->
     <div id="game-type-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h3>Select Game Type</h3>
-            <p>Choose which type of Dofus windows to detect:</p>
-            <select id="game-type-select" class="game-type-modal-select">
-                <option value="dofus2">Dofus 2 - Modern client</option>
-                <option value="dofus3">Dofus 3 - Unity/Beta client</option>
-                <option value="retro">Dofus Retro - Classic 1.29</option>
-            </select>
-            <div class="modal-buttons">
-                <button id="game-type-save" class="btn btn-primary">Apply</button>
+            <div class="modal-header">
+                <h3>Select Game Type</h3>
+                <button class="modal-close" onclick="document.getElementById('game-type-modal').style.display='none'">×</button>
+            </div>
+            <div class="modal-body">
+                <p>Choose which type of Dofus windows to detect:</p>
+                <div class="game-type-options">
+                    <label class="game-type-option">
+                        <input type="radio" name="gameType" value="dofus2">
+                        <div class="option-content">
+                            <div class="option-icon">⚔️</div>
+                            <div class="option-text">
+                                <h4>Dofus 2</h4>
+                                <p>Modern Flash/AIR client</p>
+                            </div>
+                        </div>
+                    </label>
+                    
+                    <label class="game-type-option">
+                        <input type="radio" name="gameType" value="dofus3" checked>
+                        <div class="option-content">
+                            <div class="option-icon">🎮</div>
+                            <div class="option-text">
+                                <h4>Dofus 3</h4>
+                                <p>Unity/Beta client (recommended)</p>
+                            </div>
+                        </div>
+                    </label>
+                    
+                    <label class="game-type-option">
+                        <input type="radio" name="gameType" value="retro">
+                        <div class="option-content">
+                            <div class="option-icon">🏛️</div>
+                            <div class="option-text">
+                                <h4>Dofus Retro</h4>
+                                <p>Classic 1.29 version</p>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="game-type-save" class="btn btn-primary">Apply Changes</button>
                 <button id="game-type-cancel" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Language selection modal -->
+    <div id="language-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Language</h3>
+                <button class="modal-close" onclick="document.getElementById('language-modal').style.display='none'">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="language-options">
+                    <label class="language-option">
+                        <input type="radio" name="language" value="FR" checked>
+                        <div class="option-content">
+                            <div class="option-flag">🇫🇷</div>
+                            <span>Français</span>
+                        </div>
+                    </label>
+                    
+                    <label class="language-option">
+                        <input type="radio" name="language" value="EN">
+                        <div class="option-content">
+                            <div class="option-flag">🇬🇧</div>
+                            <span>English</span>
+                        </div>
+                    </label>
+                    
+                    <label class="language-option">
+                        <input type="radio" name="language" value="DE">
+                        <div class="option-content">
+                            <div class="option-flag">🇩🇪</div>
+                            <span>Deutsch</span>
+                        </div>
+                    </label>
+                    
+                    <label class="language-option">
+                        <input type="radio" name="language" value="ES">
+                        <div class="option-content">
+                            <div class="option-flag">🇪🇸</div>
+                            <span>Español</span>
+                        </div>
+                    </label>
+                    
+                    <label class="language-option">
+                        <input type="radio" name="language" value="IT">
+                        <div class="option-content">
+                            <div class="option-flag">🇮🇹</div>
+                            <span>Italiano</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="language-save" class="btn btn-primary">Apply Language</button>
+                <button id="language-cancel" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Window organization modal -->
+    <div id="organize-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Organize Windows</h3>
+                <button class="modal-close" onclick="document.getElementById('organize-modal').style.display='none'">×</button>
+            </div>
+            <div class="modal-body">
+                <p>Choose how to arrange your Dofus windows:</p>
+                <div class="organize-options">
+                    <button class="organize-option" onclick="configRenderer.organizeWindows('grid')">
+                        <div class="organize-icon">⊞</div>
+                        <h4>Grid Layout</h4>
+                        <p>Arrange in a grid pattern</p>
+                    </button>
+                    
+                    <button class="organize-option" onclick="configRenderer.organizeWindows('horizontal')">
+                        <div class="organize-icon">⊟</div>
+                        <h4>Horizontal</h4>
+                        <p>Side by side arrangement</p>
+                    </button>
+                    
+                    <button class="organize-option" onclick="configRenderer.organizeWindows('vertical')">
+                        <div class="organize-icon">⊢</div>
+                        <h4>Vertical</h4>
+                        <p>Stack windows vertically</p>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="document.getElementById('organize-modal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Class selection modal -->
+    <div id="class-modal" class="modal" style="display: none;">
+        <div class="modal-content class-modal-content">
+            <div class="modal-header">
+                <h3>Select Character Class</h3>
+                <button class="modal-close" onclick="configRenderer.closeClassModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="class-grid" class="class-grid">
+                    <!-- Class options will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="class-cancel" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
