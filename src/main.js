@@ -16,6 +16,7 @@ class DofusOrganizer {
     this.languageManager = new LanguageManager();
     this.isConfiguring = false;
     this.dofusWindows = [];
+    this.windowMonitorInterval = null;
     
     this.initializeApp();
   }
@@ -37,15 +38,24 @@ class DofusOrganizer {
         this.showConfigWindow();
       }
     });
+
+    app.on('before-quit', () => {
+      this.cleanup();
+    });
   }
 
   createTray() {
-    this.tray = new Tray(path.join(__dirname, '../assets/icons/organizer.png'));
+    const iconPath = path.join(__dirname, '../assets/icons/organizer.png');
+    this.tray = new Tray(iconPath);
     this.updateTrayMenu();
     
     this.tray.setToolTip('Dofus Organizer');
     this.tray.on('click', () => {
       this.showConfigWindow();
+    });
+
+    this.tray.on('right-click', () => {
+      this.tray.popUpContextMenu();
     });
   }
 
@@ -69,6 +79,13 @@ class DofusOrganizer {
       },
       { type: 'separator' },
       {
+        label: lang.displayTray_dock,
+        type: 'checkbox',
+        checked: this.store.get('dock.enabled', false),
+        click: () => this.toggleDock()
+      },
+      { type: 'separator' },
+      {
         label: lang.main_quit,
         click: () => this.quit()
       }
@@ -84,18 +101,25 @@ class DofusOrganizer {
     }
 
     this.mainWindow = new BrowserWindow({
-      width: 800,
-      height: 600,
+      width: 900,
+      height: 700,
+      minWidth: 800,
+      minHeight: 600,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false
       },
       icon: path.join(__dirname, '../assets/icons/organizer.png'),
-      title: 'Dofus Organizer - Configuration'
+      title: 'Dofus Organizer - Configuration',
+      show: false
     });
 
     this.mainWindow.loadFile(path.join(__dirname, 'renderer/config.html'));
     
+    this.mainWindow.once('ready-to-show', () => {
+      this.mainWindow.show();
+    });
+
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
       this.isConfiguring = false;
@@ -111,37 +135,53 @@ class DofusOrganizer {
     
     if (!dockSettings.enabled || this.dockWindow) return;
 
+    const enabledWindows = this.dofusWindows.filter(w => w.enabled);
+    if (enabledWindows.length === 0) return;
+
     const displays = screen.getAllDisplays();
     const primaryDisplay = displays.find(display => display.bounds.x === 0 && display.bounds.y === 0) || displays[0];
     
     let x, y, width, height;
-    const dockSize = 60;
-    const windowCount = this.dofusWindows.length;
+    const dockSize = 70;
+    const itemWidth = 60;
+    const windowCount = enabledWindows.length + 2; // +2 for refresh and config buttons
     
     switch (dockSettings.position) {
       case 'NW': // Top-left
-        x = primaryDisplay.bounds.x;
-        y = primaryDisplay.bounds.y;
-        width = Math.min(400, windowCount * 50);
+        x = primaryDisplay.bounds.x + 10;
+        y = primaryDisplay.bounds.y + 10;
+        width = Math.min(600, windowCount * itemWidth);
         height = dockSize;
         break;
       case 'NE': // Top-right
-        x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(400, windowCount * 50);
-        y = primaryDisplay.bounds.y;
-        width = Math.min(400, windowCount * 50);
+        x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth) - 10;
+        y = primaryDisplay.bounds.y + 10;
+        width = Math.min(600, windowCount * itemWidth);
         height = dockSize;
         break;
       case 'SW': // Bottom-left
-        x = primaryDisplay.bounds.x;
-        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize;
-        width = Math.min(400, windowCount * 50);
+        x = primaryDisplay.bounds.x + 10;
+        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
+        width = Math.min(600, windowCount * itemWidth);
         height = dockSize;
         break;
       case 'SE': // Bottom-right (default)
       default:
-        x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(400, windowCount * 50);
-        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize;
-        width = Math.min(400, windowCount * 50);
+        x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth) - 10;
+        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
+        width = Math.min(600, windowCount * itemWidth);
+        height = dockSize;
+        break;
+      case 'N': // Top horizontal
+        x = primaryDisplay.bounds.x + (primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth)) / 2;
+        y = primaryDisplay.bounds.y + 10;
+        width = Math.min(600, windowCount * itemWidth);
+        height = dockSize;
+        break;
+      case 'S': // Bottom horizontal
+        x = primaryDisplay.bounds.x + (primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth)) / 2;
+        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
+        width = Math.min(600, windowCount * itemWidth);
         height = dockSize;
         break;
     }
@@ -152,6 +192,7 @@ class DofusOrganizer {
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
+      transparent: true,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false
@@ -163,6 +204,29 @@ class DofusOrganizer {
     this.dockWindow.on('closed', () => {
       this.dockWindow = null;
     });
+
+    // Prevent dock from stealing focus
+    this.dockWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+
+  hideDockWindow() {
+    if (this.dockWindow) {
+      this.dockWindow.close();
+      this.dockWindow = null;
+    }
+  }
+
+  toggleDock() {
+    const currentState = this.store.get('dock.enabled', false);
+    this.store.set('dock.enabled', !currentState);
+    
+    if (!currentState) {
+      this.showDockWindow();
+    } else {
+      this.hideDockWindow();
+    }
+    
+    this.updateTrayMenu();
   }
 
   setupEventHandlers() {
@@ -170,22 +234,43 @@ class DofusOrganizer {
     ipcMain.handle('get-dofus-windows', () => this.dofusWindows);
     ipcMain.handle('get-language', () => this.languageManager.getCurrentLanguage());
     ipcMain.handle('get-settings', () => this.store.store);
+    
     ipcMain.handle('save-settings', (event, settings) => {
       Object.keys(settings).forEach(key => {
         this.store.set(key, settings[key]);
       });
+      
+      // Update dock if settings changed
+      if (settings.dock) {
+        this.hideDockWindow();
+        if (settings.dock.enabled) {
+          setTimeout(() => this.showDockWindow(), 100);
+        }
+      }
     });
+    
     ipcMain.handle('activate-window', (event, windowId) => {
-      this.windowManager.activateWindow(windowId);
+      return this.windowManager.activateWindow(windowId);
     });
+    
     ipcMain.handle('refresh-windows', () => this.refreshAndSort());
+    
     ipcMain.handle('set-shortcut', (event, windowId, shortcut) => {
-      this.shortcutManager.setWindowShortcut(windowId, shortcut, () => {
+      return this.shortcutManager.setWindowShortcut(windowId, shortcut, () => {
         this.windowManager.activateWindow(windowId);
       });
     });
+    
     ipcMain.handle('remove-shortcut', (event, windowId) => {
       this.shortcutManager.removeWindowShortcut(windowId);
+    });
+
+    ipcMain.on('show-config', () => {
+      this.showConfigWindow();
+    });
+
+    ipcMain.handle('close-app', () => {
+      this.quit();
     });
   }
 
@@ -193,6 +278,7 @@ class DofusOrganizer {
     const language = this.store.get('language', 'FR');
     this.languageManager.setLanguage(language);
     
+    // Load and register shortcuts
     const shortcuts = this.store.get('shortcuts', {});
     Object.keys(shortcuts).forEach(windowId => {
       this.shortcutManager.setWindowShortcut(windowId, shortcuts[windowId], () => {
@@ -204,35 +290,42 @@ class DofusOrganizer {
   startWindowMonitoring() {
     this.refreshAndSort();
     
-    // Monitor windows every 5 seconds
-    setInterval(() => {
+    // Monitor windows every 3 seconds
+    this.windowMonitorInterval = setInterval(() => {
       if (!this.isConfiguring) {
         this.refreshAndSort();
       }
-    }, 5000);
+    }, 3000);
   }
 
   async refreshAndSort() {
     try {
       const windows = await this.windowManager.getDofusWindows();
-      const hasChanged = JSON.stringify(windows) !== JSON.stringify(this.dofusWindows);
+      const hasChanged = JSON.stringify(windows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive }))) !== 
+                        JSON.stringify(this.dofusWindows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive })));
       
       if (hasChanged) {
         this.dofusWindows = windows;
         this.updateTrayTooltip();
         
-        if (this.mainWindow) {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
           this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
         }
         
-        if (this.dockWindow) {
+        if (this.dockWindow && !this.dockWindow.isDestroyed()) {
           this.dockWindow.webContents.send('windows-updated', this.dofusWindows);
         }
         
-        // Show dock if enabled
+        // Update dock visibility
         const dockSettings = this.store.get('dock', { enabled: false });
-        if (dockSettings.enabled && !this.dockWindow) {
-          this.showDockWindow();
+        if (dockSettings.enabled) {
+          if (this.dofusWindows.filter(w => w.enabled).length > 0) {
+            if (!this.dockWindow) {
+              this.showDockWindow();
+            }
+          } else {
+            this.hideDockWindow();
+          }
         }
       }
     } catch (error) {
@@ -243,6 +336,7 @@ class DofusOrganizer {
   updateTrayTooltip() {
     const lang = this.languageManager.getCurrentLanguage();
     const windowCount = this.dofusWindows.length;
+    const enabledCount = this.dofusWindows.filter(w => w.enabled).length;
     
     let tooltip = 'Dofus Organizer\n';
     if (windowCount === 0) {
@@ -253,6 +347,10 @@ class DofusOrganizer {
       tooltip += lang.displayTray_element_N.replace('{0}', windowCount);
     }
     
+    if (enabledCount !== windowCount) {
+      tooltip += ` (${enabledCount} enabled)`;
+    }
+    
     this.tray.setToolTip(tooltip);
   }
 
@@ -261,8 +359,12 @@ class DofusOrganizer {
     this.store.set('language', langCode);
     this.updateTrayMenu();
     
-    if (this.mainWindow) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('language-changed', this.languageManager.getCurrentLanguage());
+    }
+    
+    if (this.dockWindow && !this.dockWindow.isDestroyed()) {
+      this.dockWindow.webContents.send('language-changed', this.languageManager.getCurrentLanguage());
     }
   }
 
@@ -274,10 +376,17 @@ class DofusOrganizer {
     this.shortcutManager.deactivateAll();
   }
 
-  quit() {
+  cleanup() {
+    if (this.windowMonitorInterval) {
+      clearInterval(this.windowMonitorInterval);
+    }
     this.shortcutManager.cleanup();
-    if (this.dockWindow) this.dockWindow.close();
-    if (this.mainWindow) this.mainWindow.close();
+  }
+
+  quit() {
+    this.cleanup();
+    if (this.dockWindow && !this.dockWindow.isDestroyed()) this.dockWindow.close();
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.close();
     app.quit();
   }
 }

@@ -7,6 +7,7 @@ class ConfigRenderer {
         this.settings = {};
         this.currentShortcutWindow = null;
         this.capturedShortcut = '';
+        this.isCapturingShortcut = false;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -38,7 +39,7 @@ class ConfigRenderer {
     setupEventListeners() {
         // Header controls
         this.elements.refreshBtn.addEventListener('click', () => this.refreshWindows());
-        this.elements.languageBtn.addEventListener('click', () => this.showLanguageMenu());
+        this.elements.languageBtn.addEventListener('click', () => this.toggleLanguage());
         this.elements.closeBtn.addEventListener('click', () => window.close());
 
         // Dock settings
@@ -50,8 +51,16 @@ class ConfigRenderer {
         this.elements.shortcutCancel.addEventListener('click', () => this.hideShortcutModal());
         this.elements.shortcutRemove.addEventListener('click', () => this.removeShortcut());
 
+        // Modal background click to close
+        this.elements.shortcutModal.addEventListener('click', (e) => {
+            if (e.target === this.elements.shortcutModal) {
+                this.hideShortcutModal();
+            }
+        });
+
         // Keyboard capture for shortcuts
         document.addEventListener('keydown', (e) => this.handleShortcutCapture(e));
+        document.addEventListener('keyup', (e) => this.handleShortcutRelease(e));
 
         // IPC listeners
         ipcRenderer.on('windows-updated', (event, windows) => {
@@ -62,6 +71,11 @@ class ConfigRenderer {
         ipcRenderer.on('language-changed', (event, language) => {
             this.language = language;
             this.updateLanguage();
+        });
+
+        // Window focus/blur events
+        window.addEventListener('focus', () => {
+            this.refreshWindows();
         });
     }
 
@@ -86,6 +100,27 @@ class ConfigRenderer {
         this.elements.dockLabel.textContent = this.language.displayGUI_dock || 'Enable navigation dock';
         this.elements.shortcutTitle.textContent = this.language.displayGUI_raccourci || 'Set Shortcut';
         this.elements.shortcutInstruction.textContent = 'Press the key combination you want to use:';
+        
+        // Update tooltips
+        this.elements.refreshBtn.title = this.language.displayGUI_refreshsort || 'Refresh windows';
+        this.elements.languageBtn.title = this.language.main_language || 'Change language';
+        this.elements.closeBtn.title = 'Close configuration';
+        
+        // Update dock position options
+        const positionOptions = {
+            'NW': this.language.displayGUI_dock_NW || 'Top Left',
+            'NE': this.language.displayGUI_dock_NE || 'Top Right',
+            'SW': this.language.displayGUI_dock_SW || 'Bottom Left',
+            'SE': this.language.displayGUI_dock_SE || 'Bottom Right',
+            'N': this.language.displayGUI_dock_N || 'Top (Horizontal)',
+            'S': this.language.displayGUI_dock_S || 'Bottom (Horizontal)'
+        };
+        
+        Array.from(this.elements.dockPosition.options).forEach(option => {
+            if (positionOptions[option.value]) {
+                option.textContent = positionOptions[option.value];
+            }
+        });
     }
 
     renderWindows() {
@@ -101,13 +136,14 @@ class ConfigRenderer {
         this.elements.windowsList.innerHTML = this.windows.map(window => `
             <div class="window-item" data-window-id="${window.id}">
                 <div class="window-header">
-                    <div class="window-avatar" onclick="configRenderer.changeAvatar('${window.id}')">
+                    <div class="window-avatar" onclick="configRenderer.changeAvatar('${window.id}')" 
+                         title="${this.language.displayGUI_avatar || 'Avatar'}">
                         <img src="../../assets/avatars/${window.avatar}.png" alt="Avatar" 
                              onerror="this.src='../../assets/avatars/default.png'">
                     </div>
                     <div class="window-info">
-                        <div class="window-title">${window.title}</div>
-                        <div class="window-character">${window.character}</div>
+                        <div class="window-title">${this.escapeHtml(window.title)}</div>
+                        <div class="window-character">${this.escapeHtml(window.character)}</div>
                     </div>
                     <div class="window-controls">
                         <button class="btn btn-primary" onclick="configRenderer.activateWindow('${window.id}')" 
@@ -124,12 +160,14 @@ class ConfigRenderer {
                     <div class="detail-item">
                         <div class="detail-label">${this.language.displayGUI_initiative || 'Initiative'}</div>
                         <input type="number" class="detail-value initiative-input" 
-                               value="${window.initiative}" 
-                               onchange="configRenderer.updateInitiative('${window.id}', this.value)">
+                               value="${window.initiative}" min="0" max="9999"
+                               onchange="configRenderer.updateInitiative('${window.id}', this.value)"
+                               title="Character initiative for sorting">
                     </div>
                     <div class="detail-item">
                         <div class="detail-label">${this.language.displayGUI_raccourci || 'Shortcut'}</div>
-                        <div class="shortcut-display" onclick="configRenderer.setShortcut('${window.id}')">
+                        <div class="shortcut-display" onclick="configRenderer.setShortcut('${window.id}')"
+                             title="Click to set keyboard shortcut">
                             ${window.shortcut || this.language.shortcut_none || 'No shortcut'}
                         </div>
                     </div>
@@ -144,17 +182,43 @@ class ConfigRenderer {
         `).join('');
     }
 
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     async refreshWindows() {
         try {
+            this.elements.refreshBtn.disabled = true;
+            this.elements.refreshBtn.innerHTML = '<img src="../../assets/icons/refresh.png" alt="Refresh" style="animation: spin 1s linear infinite;">';
+            
             await ipcRenderer.invoke('refresh-windows');
+            
+            setTimeout(() => {
+                this.elements.refreshBtn.disabled = false;
+                this.elements.refreshBtn.innerHTML = '<img src="../../assets/icons/refresh.png" alt="Refresh">';
+            }, 1000);
         } catch (error) {
             console.error('Error refreshing windows:', error);
+            this.elements.refreshBtn.disabled = false;
+            this.elements.refreshBtn.innerHTML = '<img src="../../assets/icons/refresh.png" alt="Refresh">';
         }
     }
 
     async activateWindow(windowId) {
         try {
-            await ipcRenderer.invoke('activate-window', windowId);
+            const success = await ipcRenderer.invoke('activate-window', windowId);
+            if (success) {
+                // Visual feedback
+                const windowElement = document.querySelector(`[data-window-id="${windowId}"]`);
+                if (windowElement) {
+                    windowElement.style.transform = 'scale(1.02)';
+                    setTimeout(() => {
+                        windowElement.style.transform = '';
+                    }, 200);
+                }
+            }
         } catch (error) {
             console.error('Error activating window:', error);
         }
@@ -170,22 +234,29 @@ class ConfigRenderer {
     }
 
     async updateInitiative(windowId, initiative) {
-        const value = parseInt(initiative) || 0;
+        const value = Math.max(0, Math.min(9999, parseInt(initiative) || 0));
         await this.saveSettings({ [`initiatives.${windowId}`]: value });
         
         const window = this.windows.find(w => w.id === windowId);
         if (window) {
             window.initiative = value;
         }
+        
+        // Re-sort windows by initiative
+        setTimeout(() => this.refreshWindows(), 500);
     }
 
     setShortcut(windowId) {
         this.currentShortcutWindow = windowId;
         this.capturedShortcut = '';
+        this.isCapturingShortcut = false;
         
         const window = this.windows.find(w => w.id === windowId);
-        this.elements.shortcutDisplay.textContent = window?.shortcut || 'No shortcut';
+        this.elements.shortcutDisplay.textContent = window?.shortcut || this.language.shortcut_none || 'No shortcut';
         this.elements.shortcutModal.style.display = 'flex';
+        
+        // Focus the modal for better keyboard capture
+        this.elements.shortcutModal.focus();
     }
 
     handleShortcutCapture(e) {
@@ -194,6 +265,13 @@ class ConfigRenderer {
         e.preventDefault();
         e.stopPropagation();
 
+        // Ignore modifier-only presses
+        if (['Control', 'Alt', 'Shift', 'Meta', 'Super'].includes(e.key)) {
+            return;
+        }
+
+        this.isCapturingShortcut = true;
+        
         const modifiers = [];
         if (e.ctrlKey) modifiers.push('Ctrl');
         if (e.altKey) modifiers.push('Alt');
@@ -201,26 +279,74 @@ class ConfigRenderer {
         if (e.metaKey) modifiers.push('Cmd');
 
         let key = e.key;
-        if (key === ' ') key = 'Space';
-        if (key === 'Control' || key === 'Alt' || key === 'Shift' || key === 'Meta') return;
+        
+        // Handle special keys
+        const specialKeys = {
+            ' ': 'Space',
+            'Enter': 'Return',
+            'Escape': 'Escape',
+            'Backspace': 'Backspace',
+            'Tab': 'Tab',
+            'Delete': 'Delete',
+            'Insert': 'Insert',
+            'Home': 'Home',
+            'End': 'End',
+            'PageUp': 'PageUp',
+            'PageDown': 'PageDown',
+            'ArrowUp': 'Up',
+            'ArrowDown': 'Down',
+            'ArrowLeft': 'Left',
+            'ArrowRight': 'Right'
+        };
+        
+        if (specialKeys[key]) {
+            key = specialKeys[key];
+        } else if (key.startsWith('F') && key.length <= 3) {
+            // Function keys F1-F12
+            key = key.toUpperCase();
+        } else if (key.length === 1) {
+            // Regular character keys
+            key = key.toUpperCase();
+        }
+
+        // Require at least one modifier for regular keys (except function keys)
+        if (modifiers.length === 0 && !key.startsWith('F')) {
+            this.elements.shortcutDisplay.textContent = 'Use at least one modifier (Ctrl, Alt, Shift)';
+            this.elements.shortcutDisplay.style.color = '#e74c3c';
+            return;
+        }
 
         this.capturedShortcut = [...modifiers, key].join('+');
         this.elements.shortcutDisplay.textContent = this.capturedShortcut;
+        this.elements.shortcutDisplay.style.color = '#27ae60';
+    }
+
+    handleShortcutRelease(e) {
+        // Reset color when keys are released
+        if (this.isCapturingShortcut && this.elements.shortcutModal.style.display === 'flex') {
+            setTimeout(() => {
+                this.elements.shortcutDisplay.style.color = '';
+            }, 100);
+        }
     }
 
     async saveShortcut() {
         if (this.currentShortcutWindow && this.capturedShortcut) {
             try {
-                await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindow, this.capturedShortcut);
+                const success = await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindow, this.capturedShortcut);
                 
-                const window = this.windows.find(w => w.id === this.currentShortcutWindow);
-                if (window) {
-                    window.shortcut = this.capturedShortcut;
+                if (success) {
+                    const window = this.windows.find(w => w.id === this.currentShortcutWindow);
+                    if (window) {
+                        window.shortcut = this.capturedShortcut;
+                    }
+                    this.renderWindows();
+                } else {
+                    alert('Failed to set shortcut. It may already be in use.');
                 }
-                
-                this.renderWindows();
             } catch (error) {
                 console.error('Error saving shortcut:', error);
+                alert('Error saving shortcut: ' + error.message);
             }
         }
         this.hideShortcutModal();
@@ -248,6 +374,8 @@ class ConfigRenderer {
         this.elements.shortcutModal.style.display = 'none';
         this.currentShortcutWindow = null;
         this.capturedShortcut = '';
+        this.isCapturingShortcut = false;
+        this.elements.shortcutDisplay.style.color = '';
     }
 
     loadDockSettings() {
@@ -288,8 +416,8 @@ class ConfigRenderer {
         }
     }
 
-    showLanguageMenu() {
-        // Simple language toggle for now
+    toggleLanguage() {
+        // Simple language toggle between FR and EN
         const currentLang = this.settings.language || 'FR';
         const newLang = currentLang === 'FR' ? 'EN' : 'FR';
         
@@ -297,6 +425,16 @@ class ConfigRenderer {
         // The main process will handle the language change
     }
 }
+
+// Add CSS for spin animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(style);
 
 // Initialize the renderer
 const configRenderer = new ConfigRenderer();
