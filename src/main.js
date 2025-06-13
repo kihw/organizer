@@ -308,9 +308,15 @@ class DofusOrganizer {
         id: w.id, 
         title: w.title, 
         character: w.character,
+        dofusClass: w.dofusClass,
         enabled: w.enabled 
       })));
       return this.dofusWindows;
+    });
+
+    ipcMain.handle('get-dofus-classes', () => {
+      console.log('IPC: get-dofus-classes called');
+      return this.windowManager.getDofusClasses();
     });
     
     ipcMain.handle('get-language', () => {
@@ -330,6 +336,19 @@ class DofusOrganizer {
       Object.keys(settings).forEach(key => {
         this.store.set(key, settings[key]);
       });
+      
+      // Special handling for class changes
+      const classChanges = Object.keys(settings).filter(key => key.startsWith('classes.'));
+      if (classChanges.length > 0) {
+        classChanges.forEach(key => {
+          const windowId = key.replace('classes.', '');
+          const classKey = settings[key];
+          this.windowManager.setWindowClass(windowId, classKey);
+        });
+        
+        // Force refresh to update avatars
+        setTimeout(() => this.refreshAndSort(), 100);
+      }
       
       // Update dock if settings changed
       if (settings.dock) {
@@ -390,7 +409,7 @@ class DofusOrganizer {
     console.log(`DofusOrganizer: Setting language to ${language}`);
     this.languageManager.setLanguage(language);
     
-    // Load and set global game type - CHANGED: default to dofus3
+    // Load and set global game type - default to dofus3
     const gameType = this.store.get('globalGameType', 'dofus3');
     console.log(`DofusOrganizer: Setting initial game type to ${gameType}`);
     this.windowManager.setGlobalGameType(gameType);
@@ -424,8 +443,8 @@ class DofusOrganizer {
       const windows = await this.windowManager.getDofusWindows();
       console.log(`DofusOrganizer: WindowManager returned ${windows.length} windows`);
       
-      const hasChanged = JSON.stringify(windows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive }))) !== 
-                        JSON.stringify(this.dofusWindows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive })));
+      const hasChanged = JSON.stringify(windows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive, dofusClass: w.dofusClass }))) !== 
+                        JSON.stringify(this.dofusWindows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive, dofusClass: w.dofusClass })));
       
       // FORCE UPDATE: Always update the array to ensure IPC gets fresh data
       const forceUpdate = this.dofusWindows.length === 0 && windows.length > 0;

@@ -6,7 +6,7 @@ class DockRenderer {
         this.language = {};
         this.settings = {};
         this.refreshing = false;
-        this.availableAvatars = Array.from({length: 20}, (_, i) => (i + 1).toString());
+        this.dofusClasses = {};
         
         this.initializeElements();
         this.setupEventListeners();
@@ -57,6 +57,7 @@ class DockRenderer {
             this.windows = await ipcRenderer.invoke('get-dofus-windows');
             this.language = await ipcRenderer.invoke('get-language');
             this.settings = await ipcRenderer.invoke('get-settings');
+            this.dofusClasses = await ipcRenderer.invoke('get-dofus-classes');
             this.renderDock();
         } catch (error) {
             console.error('Error loading dock data:', error);
@@ -91,11 +92,12 @@ class DockRenderer {
 
         sortedWindows.forEach((window, index) => {
             const displayName = window.customName || window.character;
+            const className = this.dofusClasses[window.dofusClass]?.name || 'Feca';
             const shortcutText = window.shortcut || (this.language.shortcut_none || 'No shortcut');
-            const tooltip = `${displayName}\n${this.language.dock_FENETRE_tooltip?.replace('{0}', shortcutText) || `Shortcut: ${shortcutText}`}`;
+            const tooltip = `${displayName} (${className})\n${this.language.dock_FENETRE_tooltip?.replace('{0}', shortcutText) || `Shortcut: ${shortcutText}`}`;
             const activeClass = window.isActive ? 'active' : '';
             
-            // Use .jpg extension for avatars
+            // Use .jpg extension for avatars - avatar is now determined by class
             const avatarSrc = `../../assets/avatars/${window.avatar}.jpg`;
             const fallbackSrc = `../../assets/avatars/1.jpg`;
             
@@ -105,14 +107,17 @@ class DockRenderer {
                      onmouseenter="dockRenderer.showTooltip(this, '${this.escapeHtml(tooltip)}')"
                      onmouseleave="dockRenderer.hideTooltip(this)"
                      data-window-id="${window.id}"
+                     data-class="${window.dofusClass}"
                      data-index="${index + 1}">
                     <img src="${avatarSrc}" 
                          alt="${this.escapeHtml(displayName)}"
-                         onerror="this.src='${fallbackSrc}'">
-                    <div class="tooltip">${this.escapeHtml(displayName)}<br>${this.escapeHtml(shortcutText)}</div>
+                         onerror="this.src='${fallbackSrc}'"
+                         title="${className}">
+                    <div class="tooltip">${this.escapeHtml(displayName)}<br>${this.escapeHtml(className)}<br>${this.escapeHtml(shortcutText)}</div>
                     ${window.shortcut ? `<div class="shortcut-label">${this.escapeHtml(window.shortcut)}</div>` : ''}
                     ${window.initiative > 0 ? `<div class="initiative-badge">${window.initiative}</div>` : ''}
                     <div class="index-badge">${index + 1}</div>
+                    <div class="class-indicator" title="${className}"></div>
                 </div>
             `;
         });
@@ -130,8 +135,57 @@ class DockRenderer {
         
         this.elements.dockItems.innerHTML = dockHTML;
         
+        // Apply class-specific styling
+        this.applyClassStyling();
+        
         // Update dock size based on content
         this.updateDockSize();
+    }
+
+    applyClassStyling() {
+        // Apply class-specific colors and effects
+        const windowItems = document.querySelectorAll('.dock-item.window-item');
+        
+        windowItems.forEach(item => {
+            const className = item.dataset.class;
+            const classIndicator = item.querySelector('.class-indicator');
+            
+            if (className && this.dofusClasses[className] && classIndicator) {
+                // Apply class-specific colors
+                const classColors = this.getClassColors(className);
+                classIndicator.style.background = classColors.gradient;
+                classIndicator.style.borderColor = classColors.border;
+                
+                // Add subtle glow effect
+                item.style.setProperty('--class-color', classColors.primary);
+            }
+        });
+    }
+
+    getClassColors(className) {
+        const colorMap = {
+            'feca': { primary: '#8e44ad', gradient: 'linear-gradient(135deg, #8e44ad, #9b59b6)', border: '#8e44ad' },
+            'osamodas': { primary: '#27ae60', gradient: 'linear-gradient(135deg, #27ae60, #2ecc71)', border: '#27ae60' },
+            'enutrof': { primary: '#f39c12', gradient: 'linear-gradient(135deg, #f39c12, #f1c40f)', border: '#f39c12' },
+            'sram': { primary: '#2c3e50', gradient: 'linear-gradient(135deg, #2c3e50, #34495e)', border: '#2c3e50' },
+            'xelor': { primary: '#3498db', gradient: 'linear-gradient(135deg, #3498db, #5dade2)', border: '#3498db' },
+            'ecaflip': { primary: '#e74c3c', gradient: 'linear-gradient(135deg, #e74c3c, #ec7063)', border: '#e74c3c' },
+            'eniripsa': { primary: '#f1c40f', gradient: 'linear-gradient(135deg, #f1c40f, #f7dc6f)', border: '#f1c40f' },
+            'iop': { primary: '#e67e22', gradient: 'linear-gradient(135deg, #e67e22, #f39c12)', border: '#e67e22' },
+            'cra': { primary: '#16a085', gradient: 'linear-gradient(135deg, #16a085, #1abc9c)', border: '#16a085' },
+            'sadida': { primary: '#2ecc71', gradient: 'linear-gradient(135deg, #2ecc71, #58d68d)', border: '#2ecc71' },
+            'sacrieur': { primary: '#c0392b', gradient: 'linear-gradient(135deg, #c0392b, #e74c3c)', border: '#c0392b' },
+            'pandawa': { primary: '#9b59b6', gradient: 'linear-gradient(135deg, #9b59b6, #bb8fce)', border: '#9b59b6' },
+            'roublard': { primary: '#34495e', gradient: 'linear-gradient(135deg, #34495e, #5d6d7e)', border: '#34495e' },
+            'zobal': { primary: '#95a5a6', gradient: 'linear-gradient(135deg, #95a5a6, #bdc3c7)', border: '#95a5a6' },
+            'steamer': { primary: '#d35400', gradient: 'linear-gradient(135deg, #d35400, #e67e22)', border: '#d35400' },
+            'eliotrope': { primary: '#1abc9c', gradient: 'linear-gradient(135deg, #1abc9c, #48c9b0)', border: '#1abc9c' },
+            'huppermage': { primary: '#8e44ad', gradient: 'linear-gradient(135deg, #8e44ad, #a569bd)', border: '#8e44ad' },
+            'ouginak': { primary: '#7f8c8d', gradient: 'linear-gradient(135deg, #7f8c8d, #95a5a6)', border: '#7f8c8d' },
+            'forgelance': { primary: '#bdc3c7', gradient: 'linear-gradient(135deg, #bdc3c7, #d5dbdb)', border: '#bdc3c7' }
+        };
+        
+        return colorMap[className] || { primary: '#3498db', gradient: 'linear-gradient(135deg, #3498db, #5dade2)', border: '#3498db' };
     }
 
     updateDockSize() {
@@ -324,7 +378,7 @@ const dockRenderer = new DockRenderer();
 // Export for global access if needed
 window.dockRenderer = dockRenderer;
 
-// Add additional CSS for new features
+// Add additional CSS for class system features
 const additionalStyle = document.createElement('style');
 additionalStyle.textContent = `
     .index-badge {
@@ -348,8 +402,31 @@ additionalStyle.textContent = `
         opacity: 1;
     }
 
+    .class-indicator {
+        position: absolute;
+        bottom: -3px;
+        right: -3px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        opacity: 0.9;
+        transition: all 0.3s ease;
+    }
+
+    .dock-item:hover .class-indicator {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+
     .dock-item.window-item {
         position: relative;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .dock-item.window-item:hover {
+        box-shadow: 0 8px 24px rgba(var(--class-color, 52, 152, 219), 0.3);
     }
 
     .dock-item.window-item::after {
@@ -360,7 +437,7 @@ additionalStyle.textContent = `
         transform: translateX(-50%);
         width: 0;
         height: 2px;
-        background: #3498db;
+        background: var(--class-color, #3498db);
         transition: width 0.3s ease;
     }
 
@@ -381,6 +458,54 @@ additionalStyle.textContent = `
         object-fit: cover;
         object-position: center;
         border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .dock-item:hover img {
+        transform: scale(1.05);
+        filter: brightness(1.1);
+    }
+
+    /* Class-specific hover effects */
+    .dock-item[data-class="feca"]:hover { 
+        border-color: rgba(142, 68, 173, 0.7); 
+        background: rgba(142, 68, 173, 0.1);
+    }
+    .dock-item[data-class="osamodas"]:hover { 
+        border-color: rgba(39, 174, 96, 0.7); 
+        background: rgba(39, 174, 96, 0.1);
+    }
+    .dock-item[data-class="enutrof"]:hover { 
+        border-color: rgba(243, 156, 18, 0.7); 
+        background: rgba(243, 156, 18, 0.1);
+    }
+    .dock-item[data-class="sram"]:hover { 
+        border-color: rgba(44, 62, 80, 0.7); 
+        background: rgba(44, 62, 80, 0.1);
+    }
+    .dock-item[data-class="xelor"]:hover { 
+        border-color: rgba(52, 152, 219, 0.7); 
+        background: rgba(52, 152, 219, 0.1);
+    }
+    .dock-item[data-class="ecaflip"]:hover { 
+        border-color: rgba(231, 76, 60, 0.7); 
+        background: rgba(231, 76, 60, 0.1);
+    }
+    .dock-item[data-class="eniripsa"]:hover { 
+        border-color: rgba(241, 196, 15, 0.7); 
+        background: rgba(241, 196, 15, 0.1);
+    }
+    .dock-item[data-class="iop"]:hover { 
+        border-color: rgba(230, 126, 34, 0.7); 
+        background: rgba(230, 126, 34, 0.1);
+    }
+    .dock-item[data-class="cra"]:hover { 
+        border-color: rgba(22, 160, 133, 0.7); 
+        background: rgba(22, 160, 133, 0.1);
+    }
+    .dock-item[data-class="sadida"]:hover { 
+        border-color: rgba(46, 204, 113, 0.7); 
+        background: rgba(46, 204, 113, 0.1);
     }
 
     @media (max-width: 600px) {
@@ -394,6 +519,12 @@ additionalStyle.textContent = `
             font-size: 8px;
             padding: 1px 4px;
             min-width: 12px;
+        }
+
+        .class-indicator {
+            width: 10px;
+            height: 10px;
+            border-width: 1px;
         }
     }
 `;
