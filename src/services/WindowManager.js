@@ -7,8 +7,30 @@ class WindowManager {
     this.windows = new Map();
     this.lastWindowCheck = 0;
     this.isLinux = process.platform === 'linux';
-    this.availableAvatars = Array.from({length: 20}, (_, i) => (i + 1).toString());
     this.gameType = 'dofus2'; // Default game type
+    
+    // Define available classes and their corresponding avatars
+    this.dofusClasses = {
+      'feca': { name: 'Feca', avatar: '1' },
+      'osamodas': { name: 'Osamodas', avatar: '2' },
+      'enutrof': { name: 'Enutrof', avatar: '3' },
+      'sram': { name: 'Sram', avatar: '4' },
+      'xelor': { name: 'Xelor', avatar: '5' },
+      'ecaflip': { name: 'Ecaflip', avatar: '6' },
+      'eniripsa': { name: 'Eniripsa', avatar: '7' },
+      'iop': { name: 'Iop', avatar: '8' },
+      'cra': { name: 'Cra', avatar: '9' },
+      'sadida': { name: 'Sadida', avatar: '10' },
+      'sacrieur': { name: 'Sacrieur', avatar: '11' },
+      'pandawa': { name: 'Pandawa', avatar: '12' },
+      'roublard': { name: 'Roublard', avatar: '13' },
+      'zobal': { name: 'Zobal', avatar: '14' },
+      'steamer': { name: 'Steamer', avatar: '15' },
+      'eliotrope': { name: 'Eliotrope', avatar: '16' },
+      'huppermage': { name: 'Huppermage', avatar: '17' },
+      'ouginak': { name: 'Ouginak', avatar: '18' },
+      'forgelance': { name: 'Forgelance', avatar: '20' }
+    };
   }
 
   setGlobalGameType(gameType) {
@@ -18,6 +40,19 @@ class WindowManager {
 
   getGlobalGameType() {
     return this.gameType;
+  }
+
+  getDofusClasses() {
+    return this.dofusClasses;
+  }
+
+  getClassAvatar(className) {
+    const classKey = className.toLowerCase();
+    return this.dofusClasses[classKey]?.avatar || '1';
+  }
+
+  getClassName(classKey) {
+    return this.dofusClasses[classKey]?.name || 'Feca';
   }
 
   async getDofusWindows() {
@@ -41,7 +76,7 @@ class WindowManager {
       }
 
       console.log(`WindowManager: Found ${dofusWindows.length} Dofus windows with game type: ${this.gameType}`);
-      console.log(`WindowManager: Windows details:`, dofusWindows.map(w => ({ id: w.id, title: w.title, character: w.character })));
+      console.log(`WindowManager: Windows details:`, dofusWindows.map(w => ({ id: w.id, title: w.title, className: w.className })));
 
       // Sort by initiative (descending), then by character name
       dofusWindows.sort((a, b) => {
@@ -115,6 +150,7 @@ class WindowManager {
             console.log(`✓ Found Dofus window: ${title}`);
             currentWindowIds.add(windowId);
             
+            const windowClass = this.getStoredClass(windowId);
             const windowInfo = {
               id: windowId,
               title: title,
@@ -122,11 +158,12 @@ class WindowManager {
               className: className,
               pid: pid,
               character: this.extractCharacterName(title),
+              dofusClass: windowClass,
               customName: this.getStoredCustomName(windowId),
               initiative: this.getStoredInitiative(windowId),
               isActive: await this.isLinuxWindowActive(windowId),
               bounds: await this.getLinuxWindowBounds(windowId),
-              avatar: this.getStoredAvatar(windowId),
+              avatar: this.getClassAvatar(windowClass),
               shortcut: this.getStoredShortcut(windowId),
               enabled: this.getStoredEnabled(windowId)
             };
@@ -263,6 +300,7 @@ class WindowManager {
       
       if (!title) return null;
       
+      const windowClass = this.getStoredClass(windowId);
       return {
         id: windowId,
         title: title,
@@ -270,11 +308,12 @@ class WindowManager {
         className: className,
         pid: pid,
         character: this.extractCharacterName(title),
+        dofusClass: windowClass,
         customName: this.getStoredCustomName(windowId),
         initiative: this.getStoredInitiative(windowId),
         isActive: await this.isLinuxWindowActive(windowId),
         bounds: await this.getLinuxWindowBounds(windowId),
-        avatar: this.getStoredAvatar(windowId),
+        avatar: this.getClassAvatar(windowClass),
         shortcut: this.getStoredShortcut(windowId),
         enabled: this.getStoredEnabled(windowId)
       };
@@ -326,6 +365,7 @@ class WindowManager {
           const title = this.extractTitleFromProcess(process.command);
           
           if (this.isDofusWindow(title)) {
+            const windowClass = this.getStoredClass(windowId);
             const windowInfo = {
               id: windowId,
               title: title,
@@ -333,11 +373,12 @@ class WindowManager {
               className: 'dofus',
               pid: process.pid,
               character: this.extractCharacterName(title),
+              dofusClass: windowClass,
               customName: this.getStoredCustomName(windowId),
               initiative: this.getStoredInitiative(windowId),
               isActive: true,
               bounds: { x: 0, y: 0, width: 800, height: 600 },
-              avatar: this.getStoredAvatar(windowId),
+              avatar: this.getClassAvatar(windowClass),
               shortcut: this.getStoredShortcut(windowId),
               enabled: this.getStoredEnabled(windowId)
             };
@@ -352,6 +393,7 @@ class WindowManager {
       if (windows.length === 0) {
         console.log('No Dofus processes found. Creating test window for debugging...');
         const testWindowId = 'test_dofus_window';
+        const testClass = 'feca'; // Default class for test
         const testWindow = {
           id: testWindowId,
           title: 'Dofus - Test Character',
@@ -359,11 +401,12 @@ class WindowManager {
           className: 'dofus',
           pid: '12345',
           character: 'Test Character',
+          dofusClass: testClass,
           customName: this.getStoredCustomName(testWindowId),
           initiative: this.getStoredInitiative(testWindowId),
           isActive: true,
           bounds: { x: 0, y: 0, width: 800, height: 600 },
-          avatar: this.getStoredAvatar(testWindowId),
+          avatar: this.getClassAvatar(testClass),
           shortcut: this.getStoredShortcut(testWindowId),
           enabled: this.getStoredEnabled(testWindowId)
         };
@@ -600,12 +643,6 @@ class WindowManager {
     return 'Dofus Player';
   }
 
-  // Simplified version - remove the problematic method for now
-  getCharacterFromOtherSources() {
-    // TODO: Implement when we find a reliable source
-    return null;
-  }
-
   async activateWindow(windowId) {
     try {
       if (this.isLinux) {
@@ -754,6 +791,30 @@ class WindowManager {
     }
   }
 
+  // Class management methods
+  setWindowClass(windowId, classKey) {
+    const Store = require('electron-store');
+    const store = new Store();
+    const classes = store.get('classes', {});
+    classes[windowId] = classKey;
+    store.set('classes', classes);
+    
+    // Update the window info in memory
+    if (this.windows.has(windowId)) {
+      const windowData = this.windows.get(windowId);
+      windowData.info.dofusClass = classKey;
+      windowData.info.avatar = this.getClassAvatar(classKey);
+      this.windows.set(windowId, windowData);
+    }
+  }
+
+  getNextClass(currentClass) {
+    const classKeys = Object.keys(this.dofusClasses);
+    const currentIndex = classKeys.indexOf(currentClass);
+    const nextIndex = (currentIndex + 1) % classKeys.length;
+    return classKeys[nextIndex];
+  }
+
   // Storage methods
   getStoredCustomName(windowId) {
     const Store = require('electron-store');
@@ -769,29 +830,11 @@ class WindowManager {
     return initiatives[windowId] || 0;
   }
 
-  getStoredAvatar(windowId) {
+  getStoredClass(windowId) {
     const Store = require('electron-store');
     const store = new Store();
-    const avatars = store.get('avatars', {});
-    const storedAvatar = avatars[windowId];
-    
-    // Ensure the avatar is valid (1-20)
-    if (storedAvatar && this.availableAvatars.includes(storedAvatar.toString())) {
-      return storedAvatar.toString();
-    }
-    
-    // Return a random avatar if none is stored
-    return this.getRandomAvatar();
-  }
-
-  getRandomAvatar() {
-    return this.availableAvatars[Math.floor(Math.random() * this.availableAvatars.length)];
-  }
-
-  getNextAvatar(currentAvatar) {
-    const currentIndex = this.availableAvatars.indexOf(currentAvatar.toString());
-    const nextIndex = (currentIndex + 1) % this.availableAvatars.length;
-    return this.availableAvatars[nextIndex];
+    const classes = store.get('classes', {});
+    return classes[windowId] || 'feca'; // Default to Feca
   }
 
   getStoredShortcut(windowId) {

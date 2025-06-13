@@ -7,6 +7,7 @@ class ConfigRenderer {
         this.windows = [];
         this.language = {};
         this.settings = {};
+        this.dofusClasses = {};
         
         this.initializeElements();
         this.setupEventListeners();
@@ -20,7 +21,11 @@ class ConfigRenderer {
             windowsList: document.getElementById('windows-list'),
             noWindows: document.getElementById('no-windows'),
             refreshBtn: document.getElementById('refresh-btn'),
-            closeBtn: document.getElementById('close-btn')
+            closeBtn: document.getElementById('close-btn'),
+            gameTypeBtn: document.getElementById('game-type-btn'),
+            languageBtn: document.getElementById('language-btn'),
+            dockEnabled: document.getElementById('dock-enabled'),
+            dockPosition: document.getElementById('dock-position')
         };
         
         console.log('Config.js: Elements found:', Object.keys(this.elements).filter(k => this.elements[k]));
@@ -54,6 +59,31 @@ class ConfigRenderer {
                 window.close();
             });
         }
+
+        if (this.elements.gameTypeBtn) {
+            this.elements.gameTypeBtn.addEventListener('click', () => {
+                this.showGameTypeModal();
+            });
+        }
+
+        if (this.elements.languageBtn) {
+            this.elements.languageBtn.addEventListener('click', () => {
+                this.showLanguageModal();
+            });
+        }
+
+        // Dock settings
+        if (this.elements.dockEnabled) {
+            this.elements.dockEnabled.addEventListener('change', () => {
+                this.updateDockSettings();
+            });
+        }
+
+        if (this.elements.dockPosition) {
+            this.elements.dockPosition.addEventListener('change', () => {
+                this.updateDockSettings();
+            });
+        }
     }
 
     async loadData() {
@@ -68,9 +98,14 @@ class ConfigRenderer {
             
             this.settings = await ipcRenderer.invoke('get-settings');
             console.log('Config.js: Loaded settings with keys:', Object.keys(this.settings));
+
+            // Get Dofus classes
+            this.dofusClasses = await ipcRenderer.invoke('get-dofus-classes');
+            console.log('Config.js: Loaded Dofus classes:', Object.keys(this.dofusClasses));
             
             this.renderWindows();
             this.updateLanguage();
+            this.loadDockSettings();
             
         } catch (error) {
             console.error('Config.js: Error loading data:', error);
@@ -100,17 +135,18 @@ class ConfigRenderer {
         this.windows.forEach((window, index) => {
             const displayName = window.customName || window.character || 'Unknown';
             const shortcutText = window.shortcut || 'No shortcut';
-            const avatarSrc = `../../assets/avatars/${window.avatar || '1'}.jpg`;
+            const avatarSrc = `../../assets/avatars/${window.avatar}.jpg`;
+            const className = this.dofusClasses[window.dofusClass]?.name || 'Feca';
             
             windowsHTML += `
                 <div class="window-item" data-window-id="${window.id}">
                     <div class="window-header">
-                        <div class="window-avatar" onclick="configRenderer.cycleAvatar('${window.id}')">
-                            <img src="${avatarSrc}" alt="Avatar" onerror="this.src='../../assets/avatars/1.jpg'">
+                        <div class="window-avatar" onclick="configRenderer.cycleClass('${window.id}')">
+                            <img src="${avatarSrc}" alt="Avatar" onerror="this.src='../../assets/avatars/1.jpg'" title="${className}">
                         </div>
                         <div class="window-info">
                             <div class="window-title">${this.escapeHtml(window.title)}</div>
-                            <div class="window-character">${this.escapeHtml(displayName)}</div>
+                            <div class="window-character">${this.escapeHtml(displayName)} - ${className}</div>
                         </div>
                         <div class="window-controls">
                             <button class="btn btn-primary" onclick="configRenderer.activateWindow('${window.id}')">
@@ -127,6 +163,15 @@ class ConfigRenderer {
                                        class="initiative-input" 
                                        value="${window.initiative || 0}"
                                        onchange="configRenderer.updateInitiative('${window.id}', this.value)">
+                            </div>
+                        </div>
+                        
+                        <div class="detail-item">
+                            <div class="detail-label">Class</div>
+                            <div class="detail-value">
+                                <div class="class-display" onclick="configRenderer.cycleClass('${window.id}')">
+                                    ${className}
+                                </div>
                             </div>
                         </div>
                         
@@ -162,6 +207,29 @@ class ConfigRenderer {
             if (noWindowsText) {
                 noWindowsText.textContent = this.language.displayGUI_nowindow;
             }
+        }
+
+        // Update labels
+        const labels = {
+            'dock-label': this.language.displayGUI_dock || 'Enable navigation dock',
+            'title': 'Dofus Organizer - Configuration'
+        };
+
+        Object.keys(labels).forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = labels[id];
+            }
+        });
+    }
+
+    loadDockSettings() {
+        if (this.elements.dockEnabled && this.settings.dock) {
+            this.elements.dockEnabled.checked = this.settings.dock.enabled || false;
+        }
+        
+        if (this.elements.dockPosition && this.settings.dock) {
+            this.elements.dockPosition.value = this.settings.dock.position || 'SE';
         }
     }
 
@@ -215,16 +283,222 @@ class ConfigRenderer {
         }
     }
 
-    setShortcut(windowId) {
-        console.log(`Config.js: Setting shortcut for ${windowId}`);
-        // TODO: Implement shortcut modal
-        alert('Shortcut setting not implemented yet');
+    async cycleClass(windowId) {
+        try {
+            console.log(`Config.js: Cycling class for ${windowId}`);
+            const window = this.windows.find(w => w.id === windowId);
+            if (window) {
+                const classKeys = Object.keys(this.dofusClasses);
+                const currentIndex = classKeys.indexOf(window.dofusClass);
+                const nextIndex = (currentIndex + 1) % classKeys.length;
+                const nextClass = classKeys[nextIndex];
+                
+                const settings = { [`classes.${windowId}`]: nextClass };
+                await ipcRenderer.invoke('save-settings', settings);
+                
+                // Update local data
+                window.dofusClass = nextClass;
+                window.avatar = this.dofusClasses[nextClass].avatar;
+                
+                // Re-render to show changes
+                this.renderWindows();
+            }
+        } catch (error) {
+            console.error('Config.js: Error cycling class:', error);
+        }
     }
 
-    cycleAvatar(windowId) {
-        console.log(`Config.js: Cycling avatar for ${windowId}`);
-        // TODO: Implement avatar cycling
-        alert('Avatar cycling not implemented yet');
+    setShortcut(windowId) {
+        console.log(`Config.js: Setting shortcut for ${windowId}`);
+        this.showShortcutModal(windowId);
+    }
+
+    showShortcutModal(windowId) {
+        const modal = document.getElementById('shortcut-modal');
+        const display = document.getElementById('shortcut-display');
+        const window = this.windows.find(w => w.id === windowId);
+        
+        if (modal && display) {
+            display.textContent = window?.shortcut || 'No shortcut';
+            modal.style.display = 'flex';
+            
+            // Store current window ID for modal actions
+            modal.dataset.windowId = windowId;
+            
+            this.setupShortcutCapture();
+        }
+    }
+
+    setupShortcutCapture() {
+        const modal = document.getElementById('shortcut-modal');
+        const display = document.getElementById('shortcut-display');
+        let currentShortcut = '';
+        
+        const keyHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const keys = [];
+            if (e.ctrlKey || e.metaKey) keys.push('Ctrl');
+            if (e.altKey) keys.push('Alt');
+            if (e.shiftKey) keys.push('Shift');
+            
+            if (e.key && !['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+                keys.push(e.key.toUpperCase());
+            }
+            
+            if (keys.length > 1) {
+                currentShortcut = keys.join('+');
+                display.textContent = currentShortcut;
+            }
+        };
+        
+        document.addEventListener('keydown', keyHandler);
+        
+        // Save button
+        const saveBtn = document.getElementById('shortcut-save');
+        const saveHandler = async () => {
+            const windowId = modal.dataset.windowId;
+            if (currentShortcut && windowId) {
+                await this.saveShortcut(windowId, currentShortcut);
+            }
+            this.closeShortcutModal();
+        };
+        
+        // Cancel button
+        const cancelBtn = document.getElementById('shortcut-cancel');
+        const cancelHandler = () => {
+            this.closeShortcutModal();
+        };
+        
+        // Remove button
+        const removeBtn = document.getElementById('shortcut-remove');
+        const removeHandler = async () => {
+            const windowId = modal.dataset.windowId;
+            if (windowId) {
+                await this.removeShortcut(windowId);
+            }
+            this.closeShortcutModal();
+        };
+        
+        // Store handlers for cleanup
+        modal.keyHandler = keyHandler;
+        modal.saveHandler = saveHandler;
+        modal.cancelHandler = cancelHandler;
+        modal.removeHandler = removeHandler;
+        
+        saveBtn.addEventListener('click', saveHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        removeBtn.addEventListener('click', removeHandler);
+    }
+
+    closeShortcutModal() {
+        const modal = document.getElementById('shortcut-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            
+            // Clean up event listeners
+            if (modal.keyHandler) {
+                document.removeEventListener('keydown', modal.keyHandler);
+            }
+            
+            const saveBtn = document.getElementById('shortcut-save');
+            const cancelBtn = document.getElementById('shortcut-cancel');
+            const removeBtn = document.getElementById('shortcut-remove');
+            
+            if (saveBtn && modal.saveHandler) {
+                saveBtn.removeEventListener('click', modal.saveHandler);
+            }
+            if (cancelBtn && modal.cancelHandler) {
+                cancelBtn.removeEventListener('click', modal.cancelHandler);
+            }
+            if (removeBtn && modal.removeHandler) {
+                removeBtn.removeEventListener('click', modal.removeHandler);
+            }
+        }
+    }
+
+    async saveShortcut(windowId, shortcut) {
+        try {
+            console.log(`Config.js: Saving shortcut for ${windowId}: ${shortcut}`);
+            await ipcRenderer.invoke('set-shortcut', windowId, shortcut);
+            
+            // Update local data
+            const window = this.windows.find(w => w.id === windowId);
+            if (window) {
+                window.shortcut = shortcut;
+                this.renderWindows();
+            }
+        } catch (error) {
+            console.error('Config.js: Error saving shortcut:', error);
+        }
+    }
+
+    async removeShortcut(windowId) {
+        try {
+            console.log(`Config.js: Removing shortcut for ${windowId}`);
+            await ipcRenderer.invoke('remove-shortcut', windowId);
+            
+            // Update local data
+            const window = this.windows.find(w => w.id === windowId);
+            if (window) {
+                window.shortcut = null;
+                this.renderWindows();
+            }
+        } catch (error) {
+            console.error('Config.js: Error removing shortcut:', error);
+        }
+    }
+
+    showGameTypeModal() {
+        const modal = document.getElementById('game-type-modal');
+        const select = document.getElementById('game-type-select');
+        
+        if (modal && select) {
+            select.value = this.settings.globalGameType || 'dofus3';
+            modal.style.display = 'flex';
+            
+            this.setupGameTypeModal();
+        }
+    }
+
+    setupGameTypeModal() {
+        const modal = document.getElementById('game-type-modal');
+        const saveBtn = document.getElementById('game-type-save');
+        const cancelBtn = document.getElementById('game-type-cancel');
+        const select = document.getElementById('game-type-select');
+        
+        const saveHandler = async () => {
+            if (select) {
+                await ipcRenderer.invoke('set-game-type', select.value);
+                modal.style.display = 'none';
+            }
+        };
+        
+        const cancelHandler = () => {
+            modal.style.display = 'none';
+        };
+        
+        saveBtn.addEventListener('click', saveHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        
+        // Store handlers for cleanup
+        modal.gameTypeSaveHandler = saveHandler;
+        modal.gameTypeCancelHandler = cancelHandler;
+    }
+
+    async updateDockSettings() {
+        try {
+            const dockSettings = {
+                'dock.enabled': this.elements.dockEnabled?.checked || false,
+                'dock.position': this.elements.dockPosition?.value || 'SE'
+            };
+            
+            await ipcRenderer.invoke('save-settings', dockSettings);
+            console.log('Config.js: Updated dock settings:', dockSettings);
+        } catch (error) {
+            console.error('Config.js: Error updating dock settings:', error);
+        }
     }
 }
 
