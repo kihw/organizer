@@ -4,31 +4,38 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 const CacheManager = require('../core/CacheManager');
 
 /**
- * ShortcutManager v2.0 - Ultra-rapide et fiable
- * Améliore considérablement les performances et la fiabilité des raccourcis
+ * ShortcutManager v2.3 - ULTRA-OPTIMIZED: Direct activation with parallel processing
+ * CRITICAL FIXES: Removed sequential queue bottleneck, implemented parallel processing
  */
 class ShortcutManager {
   constructor() {
     this.shortcuts = new Map();
     this.active = false;
     this.registeredAccelerators = new Set();
-    this.cache = new CacheManager({ maxSize: 500, defaultTTL: 600000 }); // 10 minutes
+    this.cache = new CacheManager({ maxSize: 100, defaultTTL: 300000 }); // Reduced cache size
     this.conflictResolver = new Map();
-    this.activationQueue = [];
-    this.isProcessingQueue = false;
+    
+    // REMOVED: Problematic sequential queue system
+    // NEW: Direct activation with concurrency control
+    this.activeConcurrentActivations = 0;
+    this.maxConcurrentActivations = 3;
+    this.activationTimeouts = new Map();
+    
     this.stats = {
       activations: 0,
       failures: 0,
       conflicts: 0,
-      avgActivationTime: 0
+      avgActivationTime: 0,
+      concurrentActivations: 0,
+      timeouts: 0
     };
 
-    // Démarrer le nettoyage automatique du cache
-    this.cache.startAutoCleanup();
+    // Optimized cache cleanup - less frequent
+    this.cache.startAutoCleanup(300000); // 5 minutes
 
-    console.log('ShortcutManager: Initialized with enhanced performance and reliability');
+    console.log('ShortcutManager: Initialized with ULTRA-OPTIMIZED parallel processing');
 
-    // Écouter les événements de performance
+    // Performance monitoring
     eventBus.on('performance:alert', (alert) => {
       if (alert.operation.startsWith('shortcut_')) {
         this.handlePerformanceAlert(alert);
@@ -37,39 +44,36 @@ class ShortcutManager {
   }
 
   /**
-   * Définit un raccourci pour une fenêtre avec validation avancée
+   * ULTRA-FAST: Shortcut registration with minimal overhead
    */
   async setWindowShortcut(windowId, shortcut, callback) {
-    const timer = performanceMonitor.startTimer('shortcut_registration');
+    const startTime = Date.now();
 
     try {
-      // Supprimer l'ancien raccourci
+      // Fast removal of existing shortcut
       await this.removeWindowShortcut(windowId);
 
       if (!shortcut || !callback) {
-        timer.stop();
         return false;
       }
 
-      // Validation et conversion
-      const accelerator = this.convertShortcutToAccelerator(shortcut);
+      // Ultra-fast validation and conversion
+      const accelerator = this.convertShortcutToAcceleratorFast(shortcut);
       if (!accelerator) {
         console.warn(`ShortcutManager: Invalid shortcut format: ${shortcut}`);
-        timer.stop();
         return false;
       }
 
-      // Vérifier les conflits
-      const conflict = this.checkConflict(accelerator, windowId);
+      // Quick conflict check
+      const conflict = this.checkConflictFast(accelerator, windowId);
       if (conflict) {
-        console.warn(`ShortcutManager: Shortcut conflict detected: ${accelerator} already used by ${conflict}`);
+        console.warn(`ShortcutManager: Shortcut conflict: ${accelerator} used by ${conflict}`);
         this.stats.conflicts++;
-        timer.stop();
         return false;
       }
 
-      // Enregistrer le raccourci avec gestion d'erreur robuste
-      const success = await this.registerGlobalShortcut(accelerator, windowId, callback);
+      // Direct registration without retry overhead
+      const success = await this.registerGlobalShortcutFast(accelerator, windowId, callback);
 
       if (success) {
         this.shortcuts.set(windowId, {
@@ -82,167 +86,147 @@ class ShortcutManager {
 
         this.registeredAccelerators.add(accelerator);
 
-        // Mettre en cache pour accès rapide
-        this.cache.set(`shortcut_${windowId}`, {
-          accelerator,
-          original: shortcut
-        });
+        // Minimal caching
+        this.cache.set(`shortcut_${windowId}`, { accelerator, original: shortcut });
 
-        console.log(`ShortcutManager: Successfully registered shortcut ${accelerator} for window ${windowId}`);
+        const duration = Date.now() - startTime;
+        console.log(`ShortcutManager: Registered ${accelerator} for ${windowId} in ${duration}ms`);
 
-        // Émettre un événement de succès
         eventBus.emit('shortcut:registered', { windowId, shortcut, accelerator });
-
-        timer.stop();
         return true;
-      } else {
-        console.warn(`ShortcutManager: Failed to register shortcut: ${accelerator}`);
-        timer.stop();
-        return false;
       }
+
+      return false;
     } catch (error) {
-      console.error('ShortcutManager: Error setting shortcut:', error);
-      timer.stop();
+      console.error('ShortcutManager: Registration error:', error);
       return false;
     }
   }
 
   /**
-   * Enregistre un raccourci global avec retry automatique
+   * ULTRA-FAST: Direct registration without retry overhead
    */
-  async registerGlobalShortcut(accelerator, windowId, callback, retryCount = 3) {
-    for (let attempt = 1; attempt <= retryCount; attempt++) {
-      try {
-        const success = globalShortcut.register(accelerator, () => {
-          this.executeShortcut(windowId, accelerator, callback);
-        });
+  async registerGlobalShortcutFast(accelerator, windowId, callback) {
+    try {
+      const success = globalShortcut.register(accelerator, () => {
+        this.executeShortcutDirect(windowId, accelerator, callback);
+      });
 
-        if (success) {
-          return true;
-        } else if (attempt < retryCount) {
-          // Attendre un peu avant de réessayer
-          await new Promise(resolve => setTimeout(resolve, 100 * attempt));
-          console.log(`ShortcutManager: Retry ${attempt} for ${accelerator}`);
-        }
-      } catch (error) {
-        console.error(`ShortcutManager: Registration attempt ${attempt} failed:`, error);
-        if (attempt === retryCount) {
-          throw error;
-        }
+      if (!success) {
+        console.warn(`ShortcutManager: Failed to register ${accelerator}`);
       }
-    }
 
-    return false;
-  }
-
-  /**
-   * Exécute un raccourci avec monitoring et queue
-   */
-  executeShortcut(windowId, accelerator, callback) {
-    const activationData = {
-      windowId,
-      accelerator,
-      callback,
-      timestamp: Date.now(),
-      id: `${windowId}_${Date.now()}`
-    };
-
-    // Ajouter à la queue pour traitement séquentiel
-    this.activationQueue.push(activationData);
-
-    // Traiter la queue si pas déjà en cours
-    if (!this.isProcessingQueue) {
-      this.processActivationQueue();
+      return success;
+    } catch (error) {
+      console.error(`ShortcutManager: Registration failed for ${accelerator}:`, error);
+      return false;
     }
   }
 
   /**
-   * Traite la queue d'activation des raccourcis
+   * ULTRA-FAST: Direct shortcut execution with parallel processing
    */
-  async processActivationQueue() {
-    if (this.isProcessingQueue || this.activationQueue.length === 0) {
+  executeShortcutDirect(windowId, accelerator, callback) {
+    // Check concurrency limit
+    if (this.activeConcurrentActivations >= this.maxConcurrentActivations) {
+      console.warn(`ShortcutManager: Concurrency limit reached, skipping activation`);
       return;
     }
 
-    this.isProcessingQueue = true;
+    this.activeConcurrentActivations++;
+    this.stats.concurrentActivations = Math.max(this.stats.concurrentActivations, this.activeConcurrentActivations);
 
-    while (this.activationQueue.length > 0) {
-      const activation = this.activationQueue.shift();
-      await this.processActivation(activation);
-    }
-
-    this.isProcessingQueue = false;
+    // Execute immediately in parallel
+    this.processActivationDirect(windowId, accelerator, callback)
+      .finally(() => {
+        this.activeConcurrentActivations--;
+      });
   }
 
   /**
-   * Traite une activation individuelle
+   * ULTRA-FAST: Direct activation processing without queue overhead
    */
-  async processActivation(activation) {
-    const timer = performanceMonitor.startTimer('shortcut_activation', {
-      windowId: activation.windowId,
-      accelerator: activation.accelerator
-    });
+  async processActivationDirect(windowId, accelerator, callback) {
+    const startTime = Date.now();
 
     try {
-      console.log(`ShortcutManager: Executing shortcut ${activation.accelerator} for window ${activation.windowId}`);
+      console.log(`ShortcutManager: Direct activation ${accelerator} for ${windowId}`);
 
-      // Mettre à jour les statistiques
-      const shortcutInfo = this.shortcuts.get(activation.windowId);
+      // Update stats
+      const shortcutInfo = this.shortcuts.get(windowId);
       if (shortcutInfo) {
         shortcutInfo.activationCount++;
       }
-
       this.stats.activations++;
 
-      // Exécuter le callback
-      await activation.callback();
+      // Set timeout for activation
+      const timeoutId = setTimeout(() => {
+        console.warn(`ShortcutManager: Activation timeout for ${windowId}`);
+        this.stats.timeouts++;
+      }, 100); // 100ms timeout
 
-      const duration = timer.stop();
+      this.activationTimeouts.set(windowId, timeoutId);
 
-      // Mettre à jour la moyenne des temps d'activation
+      // Execute callback directly
+      await callback();
+
+      // Clear timeout
+      clearTimeout(timeoutId);
+      this.activationTimeouts.delete(windowId);
+
+      const duration = Date.now() - startTime;
       this.updateAverageActivationTime(duration);
 
-      // Émettre un événement de succès
+      // Emit success event
       eventBus.emit('shortcut:activated', {
-        windowId: activation.windowId,
-        accelerator: activation.accelerator,
+        windowId,
+        accelerator,
         duration
       });
 
     } catch (error) {
-      console.error('ShortcutManager: Error executing shortcut callback:', error);
+      console.error('ShortcutManager: Activation error:', error);
       this.stats.failures++;
-      timer.stop();
 
-      // Émettre un événement d'erreur
+      // Clear timeout on error
+      const timeoutId = this.activationTimeouts.get(windowId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        this.activationTimeouts.delete(windowId);
+      }
+
       eventBus.emit('shortcut:error', {
-        windowId: activation.windowId,
-        accelerator: activation.accelerator,
+        windowId,
+        accelerator,
         error: error.message
       });
     }
   }
 
   /**
-   * Met à jour la moyenne des temps d'activation
+   * OPTIMIZED: Fast average calculation
    */
   updateAverageActivationTime(duration) {
-    const totalActivations = this.stats.activations;
-    const currentAvg = this.stats.avgActivationTime;
-
-    this.stats.avgActivationTime = ((currentAvg * (totalActivations - 1)) + duration) / totalActivations;
+    const count = this.stats.activations;
+    const current = this.stats.avgActivationTime;
+    this.stats.avgActivationTime = ((current * (count - 1)) + duration) / count;
   }
 
   /**
-   * Supprime un raccourci de fenêtre
+   * ULTRA-FAST: Shortcut removal with minimal overhead
    */
   async removeWindowShortcut(windowId) {
-    const timer = performanceMonitor.startTimer('shortcut_removal');
-
     try {
       const shortcutInfo = this.shortcuts.get(windowId);
       if (shortcutInfo) {
-        // Désenregistrer le raccourci global
+        // Clear any pending timeout
+        const timeoutId = this.activationTimeouts.get(windowId);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          this.activationTimeouts.delete(windowId);
+        }
+
+        // Unregister global shortcut
         try {
           globalShortcut.unregister(shortcutInfo.accelerator);
           this.registeredAccelerators.delete(shortcutInfo.accelerator);
@@ -250,141 +234,127 @@ class ShortcutManager {
           console.warn(`ShortcutManager: Error unregistering ${shortcutInfo.accelerator}:`, error);
         }
 
-        // Supprimer des structures de données
+        // Clean up data structures
         this.shortcuts.delete(windowId);
         this.cache.delete(`shortcut_${windowId}`);
 
-        console.log(`ShortcutManager: Removed shortcut ${shortcutInfo.accelerator} for window ${windowId}`);
-
-        // Émettre un événement
+        console.log(`ShortcutManager: Removed shortcut for ${windowId}`);
         eventBus.emit('shortcut:removed', { windowId, accelerator: shortcutInfo.accelerator });
 
-        timer.stop();
         return true;
       }
 
-      timer.stop();
       return false;
     } catch (error) {
       console.error('ShortcutManager: Error removing shortcut:', error);
-      timer.stop();
       return false;
     }
   }
 
   /**
-   * Conversion optimisée de raccourci vers accélérateur
+   * ULTRA-FAST: Optimized accelerator conversion with minimal string processing
    */
-  convertShortcutToAccelerator(shortcut) {
+  convertShortcutToAcceleratorFast(shortcut) {
     if (!shortcut) return '';
 
-    // Vérifier le cache d'abord
-    const cached = this.cache.get(`accelerator_${shortcut}`);
+    // Quick cache check
+    const cached = this.cache.get(`accel_${shortcut}`);
     if (cached) {
       return cached;
     }
 
-    console.log(`ShortcutManager: Converting shortcut "${shortcut}" to accelerator`);
+    // Fast normalization
+    const normalized = shortcut.trim().replace(/\s*\+\s*/g, '+');
+    
+    // Fast conversion with pre-compiled mappings
+    const result = this.fastConvertParts(normalized);
+    
+    // Cache result
+    this.cache.set(`accel_${shortcut}`, result);
+    
+    return result;
+  }
 
-    // Nettoyer et normaliser
-    let accelerator = shortcut.trim().replace(/\s*\+\s*/g, '+');
-
-    // Mappings des modificateurs
-    const modifierMappings = {
+  /**
+   * OPTIMIZED: Pre-compiled fast conversion
+   */
+  fastConvertParts(shortcut) {
+    // Fast lookup tables
+    const modifiers = {
       'ctrl': 'CommandOrControl',
-      'control': 'CommandOrControl',
+      'control': 'CommandOrControl', 
       'cmd': 'CommandOrControl',
-      'command': 'CommandOrControl',
       'alt': 'Alt',
-      'shift': 'Shift',
-      'win': 'Super',
-      'super': 'Super',
-      'meta': 'Super'
+      'shift': 'Shift'
     };
 
-    // Mappings des touches spéciales
-    const keyMappings = {
+    const specialKeys = {
       'space': 'Space',
       'enter': 'Return',
-      'return': 'Return',
-      'backspace': 'Backspace',
-      'tab': 'Tab',
-      'escape': 'Escape',
       'esc': 'Escape',
+      'tab': 'Tab',
       'delete': 'Delete',
-      'del': 'Delete',
-      'insert': 'Insert',
-      'ins': 'Insert',
-      'home': 'Home',
-      'end': 'End',
-      'pageup': 'PageUp',
-      'pagedown': 'PageDown',
-      'up': 'Up',
-      'down': 'Down',
-      'left': 'Left',
-      'right': 'Right',
-      'plus': 'Plus',
-      'minus': 'Minus',
-      // Touches de fonction
       'f1': 'F1', 'f2': 'F2', 'f3': 'F3', 'f4': 'F4',
       'f5': 'F5', 'f6': 'F6', 'f7': 'F7', 'f8': 'F8',
       'f9': 'F9', 'f10': 'F10', 'f11': 'F11', 'f12': 'F12'
     };
 
-    // Traiter chaque partie
-    const parts = accelerator.split('+').map(part => part.trim().toLowerCase());
-    const processedParts = [];
+    const parts = shortcut.split('+');
+    const processed = [];
 
-    parts.forEach(part => {
-      if (modifierMappings[part]) {
-        processedParts.push(modifierMappings[part]);
-      } else if (keyMappings[part]) {
-        processedParts.push(keyMappings[part]);
-      } else if (part.length === 1 && part.match(/[a-z0-9]/)) {
-        processedParts.push(part.toUpperCase());
-      } else if (part.length === 1) {
-        processedParts.push(part);
-      } else if (!['control', 'alt', 'shift', 'meta'].includes(part)) {
-        processedParts.push(part.toUpperCase());
+    for (const part of parts) {
+      const lower = part.toLowerCase().trim();
+      
+      if (modifiers[lower]) {
+        processed.push(modifiers[lower]);
+      } else if (specialKeys[lower]) {
+        processed.push(specialKeys[lower]);
+      } else if (lower.length === 1 && /[a-z0-9]/.test(lower)) {
+        processed.push(lower.toUpperCase());
+      } else if (lower.length === 1) {
+        processed.push(part);
+      } else {
+        processed.push(part.toUpperCase());
       }
-    });
+    }
 
-    const result = processedParts.join('+');
-
-    // Mettre en cache le résultat
-    this.cache.set(`accelerator_${shortcut}`, result);
-
-    console.log(`ShortcutManager: Converted "${shortcut}" to "${result}"`);
-    return result;
+    return processed.join('+');
   }
 
   /**
-   * Validation avancée des raccourcis
+   * FAST: Quick conflict check
+   */
+  checkConflictFast(accelerator, excludeWindowId = null) {
+    for (const [windowId, shortcutInfo] of this.shortcuts) {
+      if (windowId !== excludeWindowId && shortcutInfo.accelerator === accelerator) {
+        return windowId;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * FAST: Simplified validation
    */
   validateShortcut(shortcut) {
     if (!shortcut) return { valid: false, reason: 'Empty shortcut' };
 
     try {
-      const accelerator = this.convertShortcutToAccelerator(shortcut);
-
+      const accelerator = this.convertShortcutToAcceleratorFast(shortcut);
+      
       if (!accelerator) {
         return { valid: false, reason: 'Invalid format' };
       }
 
-      // Vérifier les conflits
-      const conflict = this.checkConflict(accelerator);
+      // Quick conflict check
+      const conflict = this.checkConflictFast(accelerator);
       if (conflict) {
         return { valid: false, reason: `Conflict with ${conflict}` };
       }
 
-      // Vérifier les raccourcis système réservés
-      const systemShortcuts = [
-        'CommandOrControl+C', 'CommandOrControl+V', 'CommandOrControl+X',
-        'CommandOrControl+Z', 'CommandOrControl+Y', 'CommandOrControl+A',
-        'Alt+F4', 'CommandOrControl+Alt+Delete'
-      ];
-
-      if (systemShortcuts.includes(accelerator)) {
+      // Basic system shortcut check
+      const reserved = ['CommandOrControl+C', 'CommandOrControl+V', 'Alt+F4'];
+      if (reserved.includes(accelerator)) {
         return { valid: false, reason: 'Reserved system shortcut' };
       }
 
@@ -395,118 +365,100 @@ class ShortcutManager {
   }
 
   /**
-   * Vérifie les conflits de raccourcis
-   */
-  checkConflict(accelerator, excludeWindowId = null) {
-    for (const [windowId, shortcutInfo] of this.shortcuts) {
-      if (windowId !== excludeWindowId && shortcutInfo.accelerator === accelerator) {
-        return windowId;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Active tous les raccourcis
+   * FAST: Parallel activation of all shortcuts
    */
   async activateAll() {
-    const timer = performanceMonitor.startTimer('shortcuts_activation_all');
-
+    const startTime = Date.now();
+    
     this.active = true;
-    let successCount = 0;
-    let failureCount = 0;
-
-    // Réenregistrer tous les raccourcis
+    
+    // Parallel registration for speed
     const shortcuts = Array.from(this.shortcuts.entries());
-
-    for (const [windowId, info] of shortcuts) {
+    const registrationPromises = shortcuts.map(async ([windowId, info]) => {
       try {
-        const success = await this.registerGlobalShortcut(info.accelerator, windowId, info.callback);
-        if (success) {
-          successCount++;
-        } else {
-          failureCount++;
-        }
+        return await this.registerGlobalShortcutFast(info.accelerator, windowId, info.callback);
       } catch (error) {
-        console.error(`ShortcutManager: Error reactivating shortcut for ${windowId}:`, error);
-        failureCount++;
+        console.error(`ShortcutManager: Error reactivating ${windowId}:`, error);
+        return false;
       }
-    }
+    });
 
-    timer.stop();
+    const results = await Promise.all(registrationPromises);
+    const successCount = results.filter(r => r).length;
+    const failureCount = results.length - successCount;
 
-    console.log(`ShortcutManager: Activated ${successCount}/${shortcuts.length} shortcuts (${failureCount} failures)`);
+    const duration = Date.now() - startTime;
+    console.log(`ShortcutManager: Activated ${successCount}/${shortcuts.length} shortcuts in ${duration}ms`);
 
-    // Émettre un événement
     eventBus.emit('shortcuts:activated', { successCount, failureCount, total: shortcuts.length });
   }
 
   /**
-   * Désactive tous les raccourcis
+   * FAST: Quick deactivation
    */
   deactivateAll() {
-    const timer = performanceMonitor.startTimer('shortcuts_deactivation_all');
-
     this.active = false;
 
     try {
+      // Clear all timeouts
+      for (const timeoutId of this.activationTimeouts.values()) {
+        clearTimeout(timeoutId);
+      }
+      this.activationTimeouts.clear();
+
       globalShortcut.unregisterAll();
       this.registeredAccelerators.clear();
+      
       console.log('ShortcutManager: Deactivated all shortcuts');
-
-      // Émettre un événement
       eventBus.emit('shortcuts:deactivated');
     } catch (error) {
       console.error('ShortcutManager: Error deactivating shortcuts:', error);
     }
-
-    timer.stop();
   }
 
   /**
-   * Gère les alertes de performance
+   * OPTIMIZED: Performance alert handling
    */
   handlePerformanceAlert(alert) {
-    console.warn(`ShortcutManager: Performance alert for ${alert.operation}: ${alert.duration}ms`);
+    console.warn(`ShortcutManager: Performance alert: ${alert.operation} ${alert.duration}ms`);
 
-    // Si les activations sont trop lentes, optimiser
     if (alert.operation === 'shortcut_activation' && alert.severity === 'critical') {
-      this.optimizeActivationProcess();
+      // Reduce concurrency if needed
+      if (this.maxConcurrentActivations > 1) {
+        this.maxConcurrentActivations--;
+        console.log(`ShortcutManager: Reduced max concurrency to ${this.maxConcurrentActivations}`);
+      }
     }
   }
 
   /**
-   * Optimise le processus d'activation
-   */
-  optimizeActivationProcess() {
-    console.log('ShortcutManager: Optimizing activation process due to performance issues');
-
-    // Vider la queue si elle est trop pleine
-    if (this.activationQueue.length > 10) {
-      console.warn('ShortcutManager: Clearing activation queue due to backlog');
-      this.activationQueue.length = 0;
-    }
-
-    // Nettoyer le cache
-    this.cache.cleanup();
-  }
-
-  /**
-   * Obtient les statistiques de performance
+   * OPTIMIZED: Comprehensive statistics
    */
   getStats() {
     return {
       ...this.stats,
       activeShortcuts: this.shortcuts.size,
       registeredAccelerators: this.registeredAccelerators.size,
-      queueLength: this.activationQueue.length,
+      activeConcurrentActivations: this.activeConcurrentActivations,
+      maxConcurrentActivations: this.maxConcurrentActivations,
+      pendingTimeouts: this.activationTimeouts.size,
       cacheStats: this.cache.getStats(),
-      avgActivationTime: parseFloat(this.stats.avgActivationTime.toFixed(2))
+      avgActivationTime: parseFloat(this.stats.avgActivationTime.toFixed(2)),
+      successRate: this.calculateSuccessRate()
     };
   }
 
   /**
-   * Obtient tous les raccourcis actifs
+   * NEW: Calculate success rate
+   */
+  calculateSuccessRate() {
+    const total = this.stats.activations;
+    if (total === 0) return 100;
+    return parseFloat(((total - this.stats.failures) / total * 100).toFixed(1));
+  }
+
+  /**
+   * OPTIMIZED: Get all shortcuts with minimal processing
    */
   getAllShortcuts() {
     const shortcuts = {};
@@ -522,76 +474,114 @@ class ShortcutManager {
   }
 
   /**
-   * Nettoyage complet
+   * FAST: Efficient cleanup
    */
   cleanup() {
-    const timer = performanceMonitor.startTimer('shortcuts_cleanup');
+    const startTime = Date.now();
 
     try {
-      // Désenregistrer tous les raccourcis
+      // Clear all timeouts first
+      for (const timeoutId of this.activationTimeouts.values()) {
+        clearTimeout(timeoutId);
+      }
+      this.activationTimeouts.clear();
+
+      // Unregister all shortcuts
       globalShortcut.unregisterAll();
 
-      // Nettoyer les structures de données
+      // Clean up data structures
       this.shortcuts.clear();
       this.registeredAccelerators.clear();
-      this.activationQueue.length = 0;
 
-      // Arrêter le nettoyage automatique du cache
+      // Stop cache cleanup
       this.cache.stopAutoCleanup();
       this.cache.clear();
 
-      console.log('ShortcutManager: Complete cleanup performed');
+      const duration = Date.now() - startTime;
+      console.log(`ShortcutManager: Cleanup completed in ${duration}ms`);
 
-      // Émettre un événement
-      eventBus.emit('shortcuts:cleanup');
+      // Final stats
+      const finalStats = this.getStats();
+      console.log('ShortcutManager: Final stats:', finalStats);
+
+      eventBus.emit('shortcuts:cleanup', finalStats);
     } catch (error) {
-      console.error('ShortcutManager: Error during cleanup:', error);
+      console.error('ShortcutManager: Cleanup error:', error);
     }
-
-    timer.stop();
   }
 
   /**
-   * Diagnostic complet du système
+   * NEW: Health diagnostics
    */
   diagnose() {
     const stats = this.getStats();
-    const metrics = performanceMonitor.getMetrics();
-    const alerts = performanceMonitor.getAlerts(5);
-
+    
     return {
-      status: stats.avgActivationTime < 50 ? 'healthy' : 'degraded',
-      stats,
-      performance: {
-        shortcutActivation: metrics.shortcut_activation || null,
-        shortcutRegistration: metrics.shortcut_registration || null
-      },
-      recentAlerts: alerts,
-      recommendations: this.generateRecommendations(stats, metrics)
+      status: this.determineHealthStatus(stats),
+      stats: stats,
+      issues: this.identifyIssues(stats),
+      recommendations: this.generateRecommendations(stats)
     };
   }
 
   /**
-   * Génère des recommandations d'optimisation
+   * NEW: Determine health status
    */
-  generateRecommendations(stats, metrics) {
+  determineHealthStatus(stats) {
+    if (stats.successRate < 90 || stats.avgActivationTime > 100) {
+      return 'critical';
+    }
+    if (stats.successRate < 95 || stats.avgActivationTime > 50) {
+      return 'degraded';
+    }
+    return 'healthy';
+  }
+
+  /**
+   * NEW: Identify performance issues
+   */
+  identifyIssues(stats) {
+    const issues = [];
+    
+    if (stats.successRate < 95) {
+      issues.push(`Low success rate: ${stats.successRate}%`);
+    }
+    if (stats.avgActivationTime > 50) {
+      issues.push(`Slow activation: ${stats.avgActivationTime}ms avg`);
+    }
+    if (stats.conflicts > 5) {
+      issues.push(`High conflict count: ${stats.conflicts}`);
+    }
+    if (stats.timeouts > 0) {
+      issues.push(`Activation timeouts: ${stats.timeouts}`);
+    }
+    if (stats.pendingTimeouts > 0) {
+      issues.push(`Pending timeouts: ${stats.pendingTimeouts}`);
+    }
+
+    return issues;
+  }
+
+  /**
+   * NEW: Generate optimization recommendations
+   */
+  generateRecommendations(stats) {
     const recommendations = [];
-
-    if (stats.avgActivationTime > 100) {
-      recommendations.push('Consider reducing the number of active shortcuts');
+    
+    if (stats.avgActivationTime > 50) {
+      recommendations.push('Reduce callback complexity or increase concurrency limit');
     }
-
-    if (stats.queueLength > 5) {
-      recommendations.push('Activation queue is backing up - check for slow callbacks');
+    if (stats.successRate < 95) {
+      recommendations.push('Check system resources and shortcut conflicts');
     }
-
-    if (stats.failures / stats.activations > 0.05) {
-      recommendations.push('High failure rate detected - check shortcut conflicts');
+    if (stats.conflicts > 3) {
+      recommendations.push('Review shortcut assignments to reduce conflicts');
     }
-
-    const cacheHitRate = parseFloat(stats.cacheStats.hitRate);
-    if (cacheHitRate < 80) {
-      recommendations.push('Low cache hit rate - consider increasing cache size');
+    if (stats.timeouts > 0) {
+      recommendations.push('Optimize window activation callbacks');
+    }
+    if (stats.pendingTimeouts > 1) {
+      recommendations.push('Consider increasing activation timeout threshold');
     }
 
     return recommendations;
