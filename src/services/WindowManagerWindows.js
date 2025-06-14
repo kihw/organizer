@@ -32,6 +32,44 @@ class WindowManagerWindows {
       'forgelance': { name: 'Forgelance', avatar: '20' }
     };
     
+    // Class name mappings for French/English detection
+    this.classNameMappings = {
+      // French names
+      'feca': 'feca',
+      'féca': 'feca',
+      'osamodas': 'osamodas',
+      'enutrof': 'enutrof',
+      'sram': 'sram',
+      'xelor': 'xelor',
+      'xélor': 'xelor',
+      'ecaflip': 'ecaflip',
+      'eniripsa': 'eniripsa',
+      'iop': 'iop',
+      'cra': 'cra',
+      'sadida': 'sadida',
+      'sacrieur': 'sacrieur',
+      'pandawa': 'pandawa',
+      'roublard': 'roublard',
+      'zobal': 'zobal',
+      'steamer': 'steamer',
+      'eliotrope': 'eliotrope',
+      'eliotrope': 'eliotrope',
+      'huppermage': 'huppermage',
+      'ouginak': 'ouginak',
+      'forgelance': 'forgelance',
+      
+      // English names
+      'masqueraider': 'zobal',
+      'foggernaut': 'steamer',
+      'rogue': 'roublard',
+      
+      // Alternative spellings
+      'eliotrop': 'eliotrope',
+      'elio': 'eliotrope',
+      'hupper': 'huppermage',
+      'ougi': 'ouginak'
+    };
+    
     this.initializePowerShell();
   }
 
@@ -376,7 +414,7 @@ switch ($args[0]) {
       return windows;
     } catch (error) {
       console.error('WindowManagerWindows: WMIC fallback failed:', error);
-      return this.createTestWindow();
+      return this.createTestWindows();
     }
   }
 
@@ -421,17 +459,35 @@ switch ($args[0]) {
     return 'Dofus Window';
   }
 
-  createTestWindow() {
-    // Create a test window for development/debugging
-    console.log('WindowManagerWindows: Creating test window for debugging...');
-    return [{
-      Handle: 'test_12345',
-      Title: 'Dofus - Test Window',
-      ClassName: 'TestClass',
-      ProcessId: 12345,
-      IsActive: true,
-      Bounds: { X: 100, Y: 100, Width: 800, Height: 600 }
-    }];
+  createTestWindows() {
+    // Create test windows for development/debugging with proper title format
+    console.log('WindowManagerWindows: Creating test windows for debugging...');
+    return [
+      {
+        Handle: 'test_12345',
+        Title: 'Gandalf - Iop - Dofus 3 - Beta',
+        ClassName: 'TestClass',
+        ProcessId: 12345,
+        IsActive: true,
+        Bounds: { X: 100, Y: 100, Width: 800, Height: 600 }
+      },
+      {
+        Handle: 'test_12346',
+        Title: 'Legolas - Cra - Dofus 3 - Beta',
+        ClassName: 'TestClass',
+        ProcessId: 12346,
+        IsActive: false,
+        Bounds: { X: 200, Y: 200, Width: 800, Height: 600 }
+      },
+      {
+        Handle: 'test_12347',
+        Title: 'Gimli - Enutrof - Dofus 3 - Beta',
+        ClassName: 'TestClass',
+        ProcessId: 12347,
+        IsActive: false,
+        Bounds: { X: 300, Y: 300, Width: 800, Height: 600 }
+      }
+    ];
   }
 
   processRawWindows(rawWindows) {
@@ -442,8 +498,12 @@ switch ($args[0]) {
       const windowId = rawWindow.Handle.toString();
       currentWindowIds.add(windowId);
       
-      const windowClass = this.getStoredClass(windowId);
-      const character = this.extractCharacterName(rawWindow.Title);
+      // Parse character info from title using the format: Nom - Classe - Version - Release
+      const { character, dofusClass } = this.parseWindowTitle(rawWindow.Title);
+      
+      // Get stored class or use detected class
+      const storedClass = this.getStoredClass(windowId);
+      const finalClass = storedClass !== 'feca' ? storedClass : dofusClass;
       
       const windowInfo = {
         id: windowId,
@@ -452,12 +512,12 @@ switch ($args[0]) {
         className: rawWindow.ClassName,
         pid: rawWindow.ProcessId.toString(),
         character: character,
-        dofusClass: windowClass,
+        dofusClass: finalClass,
         customName: this.getStoredCustomName(windowId),
         initiative: this.getStoredInitiative(windowId),
         isActive: rawWindow.IsActive,
         bounds: rawWindow.Bounds,
-        avatar: this.getClassAvatar(windowClass),
+        avatar: this.getClassAvatar(finalClass),
         shortcut: this.getStoredShortcut(windowId),
         enabled: this.getStoredEnabled(windowId)
       };
@@ -476,6 +536,72 @@ switch ($args[0]) {
     return processedWindows;
   }
 
+  parseWindowTitle(title) {
+    if (!title) {
+      return { character: 'Dofus Player', dofusClass: 'feca' };
+    }
+
+    console.log(`WindowManagerWindows: Parsing title: "${title}"`);
+
+    // Expected format: "Nom - Classe - Version - Release"
+    // Examples:
+    // "Gandalf - Iop - Dofus 3 - Beta"
+    // "Legolas - Cra - Dofus 2 - Release"
+    // "Gimli - Enutrof - Dofus Retro - 1.29"
+    
+    const parts = title.split(' - ').map(part => part.trim());
+    
+    if (parts.length >= 2) {
+      const characterName = parts[0];
+      const className = parts[1];
+      
+      // Normalize class name
+      const normalizedClass = this.normalizeClassName(className);
+      
+      console.log(`WindowManagerWindows: Parsed - Character: "${characterName}", Class: "${className}" -> "${normalizedClass}"`);
+      
+      return {
+        character: characterName || 'Dofus Player',
+        dofusClass: normalizedClass
+      };
+    }
+    
+    // Fallback: try to extract from other formats
+    const fallbackResult = this.extractCharacterNameFallback(title);
+    console.log(`WindowManagerWindows: Fallback parsing result:`, fallbackResult);
+    
+    return fallbackResult;
+  }
+
+  normalizeClassName(className) {
+    if (!className) return 'feca';
+    
+    const normalized = className.toLowerCase()
+      .replace(/[àáâãäå]/g, 'a')
+      .replace(/[èéêë]/g, 'e')
+      .replace(/[ìíîï]/g, 'i')
+      .replace(/[òóôõö]/g, 'o')
+      .replace(/[ùúûü]/g, 'u')
+      .replace(/[ç]/g, 'c')
+      .trim();
+    
+    // Check direct mappings first
+    if (this.classNameMappings[normalized]) {
+      return this.classNameMappings[normalized];
+    }
+    
+    // Check partial matches
+    for (const [key, value] of Object.entries(this.classNameMappings)) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        return value;
+      }
+    }
+    
+    // Default fallback
+    console.warn(`WindowManagerWindows: Unknown class name: "${className}", using default "feca"`);
+    return 'feca';
+  }
+
   extractProcessName(className) {
     if (!className) return 'Dofus';
     
@@ -487,16 +613,17 @@ switch ($args[0]) {
     return 'Dofus';
   }
 
-  extractCharacterName(title) {
-    if (!title) return 'Dofus Player';
+  extractCharacterNameFallback(title) {
+    if (!title) return { character: 'Dofus Player', dofusClass: 'feca' };
     
     // For Dofus 3, the title is usually just "Dofus"
     if (title.trim() === 'Dofus') {
-      return 'Dofus Player';
+      return { character: 'Dofus Player', dofusClass: 'feca' };
     }
     
-    // Try to extract character name from window title
+    // Try to extract character name from window title using various patterns
     const patterns = [
+      /^([^-]+)\s*-\s*([^-]+)/i,  // "Name - Class" format
       /dofus\s*-\s*(.+?)(?:\s*\(|$)/i,
       /(.+?)\s*-\s*dofus/i,
       /retro\s*-\s*(.+?)(?:\s*\(|$)/i,
@@ -507,16 +634,24 @@ switch ($args[0]) {
       const match = title.match(pattern);
       if (match && match[1]) {
         let name = match[1].trim();
+        let detectedClass = 'feca';
+        
+        // If we have a second capture group, it might be the class
+        if (match[2]) {
+          detectedClass = this.normalizeClassName(match[2].trim());
+        }
+        
         // Clean up common suffixes
         name = name.replace(/\s*\(.*\)$/, '');
         name = name.replace(/\s*-.*$/, '');
+        
         if (name.length > 0 && name.length < 50 && name !== 'Dofus') {
-          return name;
+          return { character: name, dofusClass: detectedClass };
         }
       }
     }
     
-    return 'Dofus Player';
+    return { character: 'Dofus Player', dofusClass: 'feca' };
   }
 
   async activateWindow(windowId) {

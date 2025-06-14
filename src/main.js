@@ -1,9 +1,16 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
-const WindowManager = require('./services/WindowManager');
 const ShortcutManager = require('./services/ShortcutManager');
 const LanguageManager = require('./services/LanguageManager');
+
+// Import the appropriate WindowManager based on platform
+let WindowManager;
+if (process.platform === 'win32') {
+  WindowManager = require('./services/WindowManagerWindows');
+} else {
+  WindowManager = require('./services/WindowManager');
+}
 
 class DofusOrganizer {
   constructor() {
@@ -545,6 +552,11 @@ class DofusOrganizer {
       clearInterval(this.windowMonitorInterval);
     }
     this.shortcutManager.cleanup();
+    
+    // Clean up Windows-specific resources
+    if (this.windowManager && typeof this.windowManager.cleanup === 'function') {
+      this.windowManager.cleanup();
+    }
   }
 
   quit() {
