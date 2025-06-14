@@ -16,9 +16,10 @@ set "YELLOW=[93m"
 set "BLUE=[94m"
 set "NC=[0m"
 
-REM Function to print colored output
+REM Jump to main after function definitions
 goto :main
 
+REM Function definitions
 :print_status
 echo %BLUE%[INFO]%NC% %~1
 goto :eof
@@ -36,7 +37,6 @@ echo %RED%[ERROR]%NC% %~1
 goto :eof
 
 :main
-
 REM Check if Node.js is installed
 call :print_status "Checking Node.js installation..."
 node --version >nul 2>&1
