@@ -134,8 +134,8 @@ class DofusOrganizerV2 {
       // Migration depuis l'ancienne version
       this.migrateOldSettings();
       
-      // CORRECTION: Séquence de démarrage améliorée
-      console.log('DofusOrganizerV2: Starting enhanced startup sequence...');
+      // CORRECTION: Séquence de démarrage simplifiée
+      console.log('DofusOrganizerV2: Starting simplified startup sequence...');
       await this.performStartupSequence();
     });
 
@@ -155,82 +155,30 @@ class DofusOrganizerV2 {
   }
 
   /**
-   * NOUVELLE: Séquence de démarrage optimisée
+   * NOUVELLE: Séquence de démarrage simplifiée
    */
   async performStartupSequence() {
     try {
-      console.log('DofusOrganizerV2: Step 1 - Initial window scan...');
+      console.log('DofusOrganizerV2: Performing initial refresh...');
       
-      // Étape 1: Scanner les fenêtres avec retry
-      let windows = [];
-      let attempts = 0;
-      const maxAttempts = 5;
+      // Faire un refresh initial qui va gérer tout automatiquement
+      await this.refreshAndSort();
       
-      while (windows.length === 0 && attempts < maxAttempts) {
-        attempts++;
-        console.log(`DofusOrganizerV2: Window scan attempt ${attempts}/${maxAttempts}`);
-        
-        windows = await performanceMonitor.measureAsync('startup_window_scan', async () => {
-          return await this.windowManager.getDofusWindows();
-        });
-        
-        if (windows.length === 0) {
-          console.log('DofusOrganizerV2: No windows found, waiting 2 seconds before retry...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
+      this.startupComplete = true;
+      console.log('DofusOrganizerV2: Startup sequence completed successfully!');
       
-      console.log(`DofusOrganizerV2: Found ${windows.length} windows after ${attempts} attempts`);
-      
-      // Étape 2: Mettre à jour les données des fenêtres
-      if (windows.length > 0) {
-        console.log('DofusOrganizerV2: Step 2 - Processing window data...');
-        
-        // Charger les raccourcis depuis la config pour chaque fenêtre
-        windows.forEach(window => {
-          const existingShortcut = this.shortcutConfig.getCharacterShortcut(window.character, window.dofusClass);
-          if (existingShortcut) {
-            window.shortcut = existingShortcut;
-            console.log(`DofusOrganizerV2: Found existing shortcut ${existingShortcut} for ${window.character}`);
-          }
-        });
-        
-        this.dofusWindows = windows;
-        this.updateTrayTooltip();
-        
-        // Étape 3: Charger et enregistrer les raccourcis
-        console.log('DofusOrganizerV2: Step 3 - Loading and registering shortcuts...');
-        await this.loadAndRegisterShortcuts();
-        
-        // Étape 4: Activer les raccourcis si activés
-        if (this.shortcutsEnabled) {
-          console.log('DofusOrganizerV2: Step 4 - Activating shortcuts...');
-          await this.activateShortcuts();
-        }
-        
-        // Étape 5: Afficher le dock si activé
-        const dockSettings = this.store.get('dock', { enabled: false });
-        if (dockSettings.enabled && this.dofusWindows.filter(w => w.enabled).length > 0) {
-          console.log('DofusOrganizerV2: Step 5 - Showing dock...');
-          this.showDockWindow();
-        }
-        
-        // Notification de succès
+      // Notification de succès
+      if (this.dofusWindows.length > 0) {
         this.notificationManager.showSuccess(
-          `Dofus Organizer v2.0 ready! Found ${windows.length} windows with shortcuts activated.`,
+          `Dofus Organizer v2.0 ready! Found ${this.dofusWindows.length} windows.`,
           { duration: 4000 }
         );
-        
       } else {
-        console.log('DofusOrganizerV2: No Dofus windows found at startup');
         this.notificationManager.showInfo(
           'Dofus Organizer v2.0 ready! No Dofus windows detected. Start Dofus and refresh.',
           { duration: 4000 }
         );
       }
-      
-      this.startupComplete = true;
-      console.log('DofusOrganizerV2: Startup sequence completed successfully!');
       
     } catch (error) {
       console.error('DofusOrganizerV2: Error during startup sequence:', error);
@@ -1120,17 +1068,9 @@ class DofusOrganizerV2 {
           console.log(`DofusOrganizerV2: Updated dofusWindows array, now has ${this.dofusWindows.length} windows`);
           this.updateTrayTooltip();
           
-          // CORRECTION: Recharger les raccourcis seulement si le démarrage est terminé
-          if (this.startupComplete) {
-            if (!this.shortcutsLoaded && this.dofusWindows.length > 0) {
-              console.log('DofusOrganizerV2: Windows detected, loading shortcuts...');
-              await this.loadAndRegisterShortcuts();
-            } else if (this.shortcutsLoaded && this.dofusWindows.length > 0) {
-              // Si les raccourcis étaient déjà chargés, les recharger pour gérer les changements de fenêtres
-              console.log('DofusOrganizerV2: Windows changed, reloading shortcuts...');
-              await this.loadAndRegisterShortcuts();
-            }
-          }
+          // CORRECTION PRINCIPALE: TOUJOURS recharger les raccourcis après un refresh
+          console.log('DofusOrganizerV2: Refresh detected changes, reloading shortcuts...');
+          await this.loadAndRegisterShortcuts();
           
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             console.log('DofusOrganizerV2: Sending windows-updated to config window');
