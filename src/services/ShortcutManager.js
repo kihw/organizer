@@ -213,45 +213,6 @@ class ShortcutManager {
   }
 
   /**
-   * ULTRA-FAST: Shortcut removal with minimal overhead
-   */
-  async removeWindowShortcut(windowId) {
-    try {
-      const shortcutInfo = this.shortcuts.get(windowId);
-      if (shortcutInfo) {
-        // Clear any pending timeout
-        const timeoutId = this.activationTimeouts.get(windowId);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          this.activationTimeouts.delete(windowId);
-        }
-
-        // Unregister global shortcut
-        try {
-          globalShortcut.unregister(shortcutInfo.accelerator);
-          this.registeredAccelerators.delete(shortcutInfo.accelerator);
-        } catch (error) {
-          console.warn(`ShortcutManager: Error unregistering ${shortcutInfo.accelerator}:`, error);
-        }
-
-        // Clean up data structures
-        this.shortcuts.delete(windowId);
-        this.cache.delete(`shortcut_${windowId}`);
-
-        console.log(`ShortcutManager: Removed shortcut for ${windowId}`);
-        eventBus.emit('shortcut:removed', { windowId, accelerator: shortcutInfo.accelerator });
-
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error('ShortcutManager: Error removing shortcut:', error);
-      return false;
-    }
-  }
-
-  /**
    * ULTRA-FAST: Optimized accelerator conversion with minimal string processing
    */
   convertShortcutToAcceleratorFast(shortcut) {
@@ -319,6 +280,45 @@ class ShortcutManager {
     }
 
     return processed.join('+');
+  }
+
+  /**
+   * ULTRA-FAST: Shortcut removal with minimal overhead
+   */
+  async removeWindowShortcut(windowId) {
+    try {
+      const shortcutInfo = this.shortcuts.get(windowId);
+      if (shortcutInfo) {
+        // Clear any pending timeout
+        const timeoutId = this.activationTimeouts.get(windowId);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          this.activationTimeouts.delete(windowId);
+        }
+
+        // Unregister global shortcut
+        try {
+          globalShortcut.unregister(shortcutInfo.accelerator);
+          this.registeredAccelerators.delete(shortcutInfo.accelerator);
+        } catch (error) {
+          console.warn(`ShortcutManager: Error unregistering ${shortcutInfo.accelerator}:`, error);
+        }
+
+        // Clean up data structures
+        this.shortcuts.delete(windowId);
+        this.cache.delete(`shortcut_${windowId}`);
+
+        console.log(`ShortcutManager: Removed shortcut for ${windowId}`);
+        eventBus.emit('shortcut:removed', { windowId, accelerator: shortcutInfo.accelerator });
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('ShortcutManager: Error removing shortcut:', error);
+      return false;
+    }
   }
 
   /**
@@ -508,83 +508,6 @@ class ShortcutManager {
     } catch (error) {
       console.error('ShortcutManager: Cleanup error:', error);
     }
-  }
-
-  /**
-   * NEW: Health diagnostics
-   */
-  diagnose() {
-    const stats = this.getStats();
-    
-    return {
-      status: this.determineHealthStatus(stats),
-      stats: stats,
-      issues: this.identifyIssues(stats),
-      recommendations: this.generateRecommendations(stats)
-    };
-  }
-
-  /**
-   * NEW: Determine health status
-   */
-  determineHealthStatus(stats) {
-    if (stats.successRate < 90 || stats.avgActivationTime > 100) {
-      return 'critical';
-    }
-    if (stats.successRate < 95 || stats.avgActivationTime > 50) {
-      return 'degraded';
-    }
-    return 'healthy';
-  }
-
-  /**
-   * NEW: Identify performance issues
-   */
-  identifyIssues(stats) {
-    const issues = [];
-    
-    if (stats.successRate < 95) {
-      issues.push(`Low success rate: ${stats.successRate}%`);
-    }
-    if (stats.avgActivationTime > 50) {
-      issues.push(`Slow activation: ${stats.avgActivationTime}ms avg`);
-    }
-    if (stats.conflicts > 5) {
-      issues.push(`High conflict count: ${stats.conflicts}`);
-    }
-    if (stats.timeouts > 0) {
-      issues.push(`Activation timeouts: ${stats.timeouts}`);
-    }
-    if (stats.pendingTimeouts > 0) {
-      issues.push(`Pending timeouts: ${stats.pendingTimeouts}`);
-    }
-
-    return issues;
-  }
-
-  /**
-   * NEW: Generate optimization recommendations
-   */
-  generateRecommendations(stats) {
-    const recommendations = [];
-    
-    if (stats.avgActivationTime > 50) {
-      recommendations.push('Reduce callback complexity or increase concurrency limit');
-    }
-    if (stats.successRate < 95) {
-      recommendations.push('Check system resources and shortcut conflicts');
-    }
-    if (stats.conflicts > 3) {
-      recommendations.push('Review shortcut assignments to reduce conflicts');
-    }
-    if (stats.timeouts > 0) {
-      recommendations.push('Optimize window activation callbacks');
-    }
-    if (stats.pendingTimeouts > 1) {
-      recommendations.push('Consider increasing activation timeout threshold');
-    }
-
-    return recommendations;
   }
 }
 

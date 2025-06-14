@@ -136,28 +136,6 @@ class CacheManager {
   }
 
   /**
-   * Éviction basée sur la fréquence d'utilisation (LFU)
-   */
-  evictLeastUsed() {
-    if (this.cache.size === 0) return;
-    
-    let leastUsedKey = null;
-    let leastAccessCount = Infinity;
-    
-    for (const [key, item] of this.cache) {
-      if (item.accessCount < leastAccessCount) {
-        leastAccessCount = item.accessCount;
-        leastUsedKey = key;
-      }
-    }
-    
-    if (leastUsedKey) {
-      this.delete(leastUsedKey);
-      this.stats.evictions++;
-    }
-  }
-
-  /**
    * Récupère ou calcule une valeur (pattern cache-aside)
    */
   async getOrSet(key, factory, ttl = this.defaultTTL) {
@@ -174,20 +152,6 @@ class CacheManager {
     }
     
     return value;
-  }
-
-  /**
-   * Mise à jour conditionnelle du cache
-   */
-  setIfNewer(key, value, timestamp, ttl = this.defaultTTL) {
-    const existing = this.cache.get(key);
-    
-    if (!existing || timestamp > existing.timestamp) {
-      this.set(key, value, ttl);
-      return true;
-    }
-    
-    return false;
   }
 
   /**
