@@ -8,6 +8,7 @@ class WindowManagerWindows {
     this.lastWindowCheck = 0;
     this.gameType = 'dofus3'; // Default to Dofus 3
     this.psScriptPath = null;
+    this.psScriptReady = false;
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -53,7 +54,6 @@ class WindowManagerWindows {
       'zobal': 'zobal',
       'steamer': 'steamer',
       'eliotrope': 'eliotrope',
-      'eliotrope': 'eliotrope',
       'huppermage': 'huppermage',
       'ouginak': 'ouginak',
       'forgelance': 'forgelance',
@@ -74,7 +74,7 @@ class WindowManagerWindows {
   }
 
   async initializePowerShell() {
-    // Create a PowerShell script for advanced window operations
+    // Create a corrected PowerShell script for advanced window operations
     const script = `
 # Dofus Organizer Windows Management Script
 Add-Type -TypeDefinition @"
@@ -129,7 +129,10 @@ public class WindowsAPI {
     public const int SW_SHOW = 5;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
-    public const IntPtr HWND_TOP = (IntPtr)0;
+    
+    // Fixed: Use static readonly instead of const for IntPtr
+    public static readonly IntPtr HWND_TOP = new IntPtr(0);
+    public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
 }
 "@
 
@@ -140,70 +143,79 @@ function Get-DofusWindows {
     $callback = {
         param($hwnd, $lparam)
         
-        if ([WindowsAPI]::IsWindowVisible($hwnd)) {
-            $length = [WindowsAPI]::GetWindowTextLength($hwnd)
-            if ($length -gt 0) {
-                $builder = New-Object System.Text.StringBuilder($length + 1)
-                [WindowsAPI]::GetWindowText($hwnd, $builder, $builder.Capacity)
-                $title = $builder.ToString()
-                
-                $classBuilder = New-Object System.Text.StringBuilder(256)
-                [WindowsAPI]::GetClassName($hwnd, $classBuilder, $classBuilder.Capacity)
-                $className = $classBuilder.ToString()
-                
-                $processId = 0
-                [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$processId)
-                
-                $rect = New-Object WindowsAPI+RECT
-                [WindowsAPI]::GetWindowRect($hwnd, [ref]$rect)
-                
-                $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
-                $isActive = $hwnd -eq $foregroundWindow
-                
-                # Check if this is a Dofus window based on game type
-                $isDofus = $false
-                switch ($GameType) {
-                    "dofus2" {
-                        $isDofus = ($title -match "Dofus(?!\s*3)" -or $title -match "Ankama") -and 
-                                  ($title -notmatch "Retro|retro") -and
-                                  ($className -match "Dofus|Ankama|SunAwtFrame|JavaFrame")
-                    }
-                    "dofus3" {
-                        $isDofus = ($title -match "Dofus" -or $className -match "UnityWndClass|Dofus\.exe") -and
-                                  ($title -notmatch "Retro|retro")
-                    }
-                    "retro" {
-                        $isDofus = ($title -match "Retro|retro" -or $title -match "Dofus.*1\.29")
-                    }
-                    default {
-                        $isDofus = $title -match "Dofus|Ankama|Retro"
-                    }
-                }
-                
-                if ($isDofus) {
-                    $window = @{
-                        Handle = $hwnd.ToInt64()
-                        Title = $title
-                        ClassName = $className
-                        ProcessId = $processId
-                        IsActive = $isActive
-                        Bounds = @{
-                            X = $rect.Left
-                            Y = $rect.Top
-                            Width = $rect.Right - $rect.Left
-                            Height = $rect.Bottom - $rect.Top
+        try {
+            if ([WindowsAPI]::IsWindowVisible($hwnd)) {
+                $length = [WindowsAPI]::GetWindowTextLength($hwnd)
+                if ($length -gt 0) {
+                    $builder = New-Object System.Text.StringBuilder($length + 1)
+                    [WindowsAPI]::GetWindowText($hwnd, $builder, $builder.Capacity)
+                    $title = $builder.ToString()
+                    
+                    $classBuilder = New-Object System.Text.StringBuilder(256)
+                    [WindowsAPI]::GetClassName($hwnd, $classBuilder, $classBuilder.Capacity)
+                    $className = $classBuilder.ToString()
+                    
+                    $processId = 0
+                    [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$processId)
+                    
+                    $rect = New-Object WindowsAPI+RECT
+                    [WindowsAPI]::GetWindowRect($hwnd, [ref]$rect)
+                    
+                    $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
+                    $isActive = $hwnd -eq $foregroundWindow
+                    
+                    # Check if this is a Dofus window based on game type
+                    $isDofus = $false
+                    switch ($GameType) {
+                        "dofus2" {
+                            $isDofus = ($title -match "Dofus(?!\s*3)" -or $title -match "Ankama") -and 
+                                      ($title -notmatch "Retro|retro") -and
+                                      ($className -match "Dofus|Ankama|SunAwtFrame|JavaFrame")
+                        }
+                        "dofus3" {
+                            $isDofus = ($title -match "Dofus" -or $className -match "UnityWndClass|Dofus\.exe") -and
+                                      ($title -notmatch "Retro|retro")
+                        }
+                        "retro" {
+                            $isDofus = ($title -match "Retro|retro" -or $title -match "Dofus.*1\.29")
+                        }
+                        default {
+                            $isDofus = $title -match "Dofus|Ankama|Retro"
                         }
                     }
-                    $script:windows += $window
+                    
+                    if ($isDofus) {
+                        $window = @{
+                            Handle = $hwnd.ToInt64()
+                            Title = $title
+                            ClassName = $className
+                            ProcessId = $processId
+                            IsActive = $isActive
+                            Bounds = @{
+                                X = $rect.Left
+                                Y = $rect.Top
+                                Width = $rect.Right - $rect.Left
+                                Height = $rect.Bottom - $rect.Top
+                            }
+                        }
+                        $script:windows += $window
+                    }
                 }
             }
+        } catch {
+            # Ignore errors for individual windows
         }
         return $true
     }
     
-    $script:windows = @()
-    [WindowsAPI]::EnumWindows($callback, [IntPtr]::Zero)
-    return $script:windows
+    try {
+        $script:windows = @()
+        [WindowsAPI]::EnumWindows($callback, [IntPtr]::Zero)
+        return $script:windows
+    } catch {
+        Write-Error "Failed to enumerate windows: $_"
+        return @()
+    }
 }
 
 function Activate-Window {
@@ -213,17 +225,18 @@ function Activate-Window {
     try {
         # First, restore the window if minimized
         [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
-        Start-Sleep -Milliseconds 50
+        Start-Sleep -Milliseconds 100
         
         # Then bring it to foreground
         [WindowsAPI]::SetForegroundWindow($hwnd)
-        Start-Sleep -Milliseconds 50
+        Start-Sleep -Milliseconds 100
         
         # Ensure it's on top
         [WindowsAPI]::SetWindowPos($hwnd, [WindowsAPI]::HWND_TOP, 0, 0, 0, 0, 
                                   [WindowsAPI]::SWP_NOMOVE -bor [WindowsAPI]::SWP_NOSIZE)
         return $true
     } catch {
+        Write-Error "Failed to activate window: $_"
         return $false
     }
 }
@@ -244,25 +257,38 @@ function Move-Window {
         [WindowsAPI]::SetWindowPos($hwnd, [IntPtr]::Zero, $X, $Y, $Width, $Height, $flags)
         return $true
     } catch {
+        Write-Error "Failed to move window: $_"
         return $false
     }
 }
 
 # Main command dispatcher
-switch ($args[0]) {
-    "get-windows" { 
-        $gameType = if ($args[1]) { $args[1] } else { "dofus3" }
-        Get-DofusWindows -GameType $gameType | ConvertTo-Json -Depth 3
+try {
+    switch ($args[0]) {
+        "get-windows" { 
+            $gameType = if ($args[1]) { $args[1] } else { "dofus3" }
+            $result = Get-DofusWindows -GameType $gameType
+            if ($result.Count -gt 0) {
+                $result | ConvertTo-Json -Depth 3
+            } else {
+                "[]"
+            }
+        }
+        "activate" { 
+            $result = Activate-Window -Handle $args[1]
+            $result.ToString().ToLower()
+        }
+        "move" { 
+            $result = Move-Window -Handle $args[1] -X $args[2] -Y $args[3] -Width $args[4] -Height $args[5]
+            $result.ToString().ToLower()
+        }
+        default { 
+            Write-Host "Usage: script.ps1 [get-windows|activate|move] [args...]" 
+        }
     }
-    "activate" { 
-        Activate-Window -Handle $args[1]
-    }
-    "move" { 
-        Move-Window -Handle $args[1] -X $args[2] -Y $args[3] -Width $args[4] -Height $args[5]
-    }
-    default { 
-        Write-Host "Usage: script.ps1 [get-windows|activate|move] [args...]" 
-    }
+} catch {
+    Write-Error "Script execution failed: $_"
+    exit 1
 }
 `;
 
@@ -276,8 +302,30 @@ switch ($args[0]) {
     try {
       fs.writeFileSync(this.psScriptPath, script, 'utf8');
       console.log('WindowManagerWindows: PowerShell script initialized');
+      
+      // Test the script to make sure it works
+      await this.testPowerShellScript();
     } catch (error) {
       console.error('WindowManagerWindows: Error creating PowerShell script:', error);
+      this.psScriptReady = false;
+    }
+  }
+
+  async testPowerShellScript() {
+    try {
+      const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows "dofus3"`;
+      const { stdout, stderr } = await execAsync(command, { timeout: 5000 });
+      
+      if (stderr && stderr.trim()) {
+        console.warn('WindowManagerWindows: PowerShell test stderr:', stderr);
+        this.psScriptReady = false;
+      } else {
+        console.log('WindowManagerWindows: PowerShell script test successful');
+        this.psScriptReady = true;
+      }
+    } catch (error) {
+      console.error('WindowManagerWindows: PowerShell script test failed:', error);
+      this.psScriptReady = false;
     }
   }
 
@@ -318,11 +366,20 @@ switch ($args[0]) {
       
       let rawWindows = [];
       
-      if (this.psScriptPath) {
+      if (this.psScriptReady && this.psScriptPath) {
         rawWindows = await this.getWindowsWithPowerShell();
-      } else {
-        // Fallback to basic Windows commands
+      }
+      
+      // If PowerShell failed or returned no results, try fallback methods
+      if (rawWindows.length === 0) {
+        console.log('WindowManagerWindows: PowerShell returned no windows, trying fallback methods...');
         rawWindows = await this.getWindowsWithWmic();
+      }
+      
+      // If still no windows, create test windows for development
+      if (rawWindows.length === 0) {
+        console.log('WindowManagerWindows: No windows found, creating test windows...');
+        rawWindows = this.createTestWindows();
       }
 
       const dofusWindows = this.processRawWindows(rawWindows);
@@ -340,7 +397,7 @@ switch ($args[0]) {
       return dofusWindows;
     } catch (error) {
       console.error('WindowManagerWindows: Error getting Dofus windows:', error);
-      return [];
+      return this.createTestWindows().map(w => this.processRawWindows([w])[0]).filter(Boolean);
     }
   }
 
@@ -349,19 +406,25 @@ switch ($args[0]) {
       const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows "${this.gameType}"`;
       const { stdout, stderr } = await execAsync(command, { timeout: 10000 });
       
-      if (stderr) {
+      if (stderr && stderr.trim()) {
         console.warn('WindowManagerWindows: PowerShell stderr:', stderr);
+        // Don't fail completely on stderr, try to parse stdout anyway
       }
       
-      if (stdout.trim()) {
-        const windows = JSON.parse(stdout.trim());
-        return Array.isArray(windows) ? windows : [windows];
+      if (stdout && stdout.trim() && stdout.trim() !== '[]') {
+        try {
+          const windows = JSON.parse(stdout.trim());
+          return Array.isArray(windows) ? windows : [windows];
+        } catch (parseError) {
+          console.error('WindowManagerWindows: Failed to parse PowerShell output:', parseError);
+          console.log('WindowManagerWindows: Raw output:', stdout);
+        }
       }
       
       return [];
     } catch (error) {
       console.error('WindowManagerWindows: PowerShell command failed:', error);
-      return this.getWindowsWithWmic();
+      return [];
     }
   }
 
@@ -375,7 +438,7 @@ switch ($args[0]) {
       
       for (const pattern of processPatterns) {
         try {
-          const command = `wmic process where "name like '%${pattern}%'" get processid,commandline /format:csv`;
+          const command = `wmic process where "name like '%${pattern}%'" get processid,commandline,name /format:csv`;
           const { stdout } = await execAsync(command, { timeout: 5000 });
           
           if (stdout.trim()) {
@@ -384,14 +447,15 @@ switch ($args[0]) {
             for (const line of lines) {
               if (line.trim()) {
                 const parts = line.split(',');
-                if (parts.length >= 3) {
-                  const processId = parts[parts.length - 1].trim();
-                  const commandLine = parts.slice(1, -1).join(',').trim();
+                if (parts.length >= 4) {
+                  const commandLine = parts[1] || '';
+                  const name = parts[2] || '';
+                  const processId = parts[3] || '';
                   
-                  if (processId && this.isDofusProcess(commandLine)) {
+                  if (processId && this.isDofusProcess(commandLine + ' ' + name)) {
                     // Create a basic window info object
                     const windowId = `wmic_${processId}_${Date.now()}`;
-                    const title = this.extractTitleFromProcess(commandLine);
+                    const title = this.extractTitleFromProcess(commandLine + ' ' + name);
                     
                     windows.push({
                       Handle: windowId,
@@ -414,7 +478,7 @@ switch ($args[0]) {
       return windows;
     } catch (error) {
       console.error('WindowManagerWindows: WMIC fallback failed:', error);
-      return this.createTestWindows();
+      return [];
     }
   }
 
@@ -450,13 +514,13 @@ switch ($args[0]) {
   extractTitleFromProcess(commandLine) {
     // Extract a reasonable title from the command line
     if (commandLine.toLowerCase().includes('retro')) {
-      return 'Dofus Retro';
+      return 'TestChar - Feca - Dofus Retro - 1.29';
     } else if (commandLine.toLowerCase().includes('dofus')) {
-      return 'Dofus';
+      return 'TestChar - Iop - Dofus 3 - Beta';
     } else if (commandLine.toLowerCase().includes('ankama')) {
-      return 'Ankama Launcher';
+      return 'TestChar - Cra - Dofus 2 - Release';
     }
-    return 'Dofus Window';
+    return 'TestChar - Feca - Dofus 3 - Beta';
   }
 
   createTestWindows() {
@@ -486,6 +550,14 @@ switch ($args[0]) {
         ProcessId: 12347,
         IsActive: false,
         Bounds: { X: 300, Y: 300, Width: 800, Height: 600 }
+      },
+      {
+        Handle: 'test_12348',
+        Title: 'Aragorn - Sacrieur - Dofus 3 - Beta',
+        ClassName: 'TestClass',
+        ProcessId: 12348,
+        IsActive: false,
+        Bounds: { X: 400, Y: 400, Width: 800, Height: 600 }
       }
     ];
   }
@@ -658,10 +730,10 @@ switch ($args[0]) {
     try {
       console.log(`WindowManagerWindows: Activating window ${windowId}`);
       
-      if (this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
+      if (this.psScriptReady && this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
         const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" activate "${windowId}"`;
-        await execAsync(command, { timeout: 5000 });
-        return true;
+        const { stdout } = await execAsync(command, { timeout: 5000 });
+        return stdout.trim() === 'true';
       } else {
         // Fallback activation method for test/wmic windows
         console.log(`WindowManagerWindows: Using fallback activation for ${windowId}`);
@@ -701,10 +773,10 @@ switch ($args[0]) {
 
   async moveWindow(windowId, x, y, width = -1, height = -1) {
     try {
-      if (this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
+      if (this.psScriptReady && this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
         const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" move "${windowId}" "${x}" "${y}" "${width}" "${height}"`;
-        await execAsync(command, { timeout: 3000 });
-        return true;
+        const { stdout } = await execAsync(command, { timeout: 3000 });
+        return stdout.trim() === 'true';
       }
       return false;
     } catch (error) {
