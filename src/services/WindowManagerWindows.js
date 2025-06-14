@@ -3,9 +3,8 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 /**
- * WindowManagerWindows v2.4 - ENHANCED: Multiple detection methods with strict title validation
- * CRITICAL FIXES: Proper Dofus detection patterns with title requirements validation
- * NEW FIX: Window activation without resizing + strict title filtering
+ * WindowManagerWindows v2.5 - FIXED: Title validation accepts Dofus class names
+ * CRITICAL FIX: Accept titles with valid Dofus classes even without keywords
  */
 class WindowManagerWindows {
   constructor() {
@@ -56,7 +55,7 @@ class WindowManagerWindows {
       'eliotrop': 'eliotrope', 'elio': 'eliotrope', 'hupper': 'huppermage', 'ougi': 'ouginak'
     };
 
-    // NOUVEAU: Patterns de validation des titres requis
+    // FIXED: Title validation patterns
     this.titleValidationPatterns = [
       // Format standard: "Personnage - Classe - Version - Release"
       /^[^-]+ - [^-]+ - [^-]+ - [^-]+$/,
@@ -74,12 +73,15 @@ class WindowManagerWindows {
       /^[^\[]+ \[\d+\] - .+$/
     ];
 
-    // NOUVEAU: Mots-clés requis dans le titre pour validation
+    // FIXED: More flexible keywords - include class names
     this.requiredTitleKeywords = [
-      'dofus', 'steamer', 'boulonix', 'ankama', 'unity', 'retro'
+      'dofus', 'steamer', 'boulonix', 'ankama', 'unity', 'retro',
+      // Add all class names as valid keywords
+      ...Object.keys(this.dofusClasses),
+      ...Object.keys(this.classNameMappings)
     ];
     
-    console.log('WindowManagerWindows: Initialized with ENHANCED detection and title validation');
+    console.log('WindowManagerWindows: Initialized with FIXED title validation for Dofus classes');
   }
 
   getDofusClasses() {
@@ -113,10 +115,10 @@ class WindowManagerWindows {
       }
       this.lastWindowCheck = now;
 
-      console.log('WindowManagerWindows: Starting enhanced Dofus detection with title validation...');
+      console.log('WindowManagerWindows: Starting enhanced Dofus detection with FIXED title validation...');
       
       // ENHANCED: Use multiple detection methods with title validation
-      const windows = await this.detectDofusWithStrictValidation();
+      const windows = await this.detectDofusWithFixedValidation();
       
       if (windows && windows.length > 0) {
         const processedWindows = this.processRawWindows(windows);
@@ -147,11 +149,11 @@ class WindowManagerWindows {
   }
 
   /**
-   * ENHANCED: Multiple detection methods with strict title validation
+   * FIXED: Multiple detection methods with improved title validation
    */
-  async detectDofusWithStrictValidation() {
+  async detectDofusWithFixedValidation() {
     try {
-      console.log('WindowManagerWindows: Using multiple detection methods with title validation...');
+      console.log('WindowManagerWindows: Using multiple detection methods with FIXED title validation...');
       
       let allWindows = [];
       
@@ -178,8 +180,8 @@ class WindowManagerWindows {
       // Remove duplicates based on handle
       const uniqueWindows = this.removeDuplicateWindows(allWindows);
       
-      // CRITICAL: Apply strict title validation
-      const validatedWindows = this.validateWindowTitles(uniqueWindows);
+      // FIXED: Apply improved title validation
+      const validatedWindows = this.validateWindowTitlesFixed(uniqueWindows);
       
       console.log(`WindowManagerWindows: Found ${allWindows.length} total, ${uniqueWindows.length} unique, ${validatedWindows.length} validated windows`);
       return validatedWindows;
@@ -191,7 +193,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * NEW: Remove duplicate windows based on handle
+   * Remove duplicate windows based on handle
    */
   removeDuplicateWindows(windows) {
     const seen = new Set();
@@ -208,13 +210,13 @@ class WindowManagerWindows {
   }
 
   /**
-   * CRITICAL: Validate window titles against required patterns
+   * FIXED: Improved window title validation that accepts Dofus class names
    */
-  validateWindowTitles(windows) {
+  validateWindowTitlesFixed(windows) {
     const validatedWindows = [];
     
     for (const window of windows) {
-      if (this.isValidDofusTitle(window.Title)) {
+      if (this.isValidDofusTitleFixed(window.Title)) {
         validatedWindows.push(window);
         console.log(`WindowManagerWindows: ✓ Valid title: "${window.Title}"`);
       } else {
@@ -226,22 +228,25 @@ class WindowManagerWindows {
   }
 
   /**
-   * NEW: Check if window title meets Dofus requirements
+   * FIXED: Check if window title meets Dofus requirements with class name support
    */
-  isValidDofusTitle(title) {
+  isValidDofusTitleFixed(title) {
     if (!title || title.trim().length === 0) {
       return false;
     }
     
     const lowerTitle = title.toLowerCase();
     
-    // Check 1: Must contain at least one required keyword
+    // Check 1: Must contain at least one required keyword OR a valid Dofus class
     const hasRequiredKeyword = this.requiredTitleKeywords.some(keyword => 
-      lowerTitle.includes(keyword)
+      lowerTitle.includes(keyword.toLowerCase())
     );
     
-    if (!hasRequiredKeyword) {
-      console.log(`WindowManagerWindows: Title "${title}" rejected - no required keywords`);
+    // FIXED: Also check if title contains a valid Dofus class name
+    const hasValidClass = this.containsValidDofusClass(title);
+    
+    if (!hasRequiredKeyword && !hasValidClass) {
+      console.log(`WindowManagerWindows: Title "${title}" rejected - no required keywords or valid class`);
       return false;
     }
     
@@ -275,7 +280,34 @@ class WindowManagerWindows {
   }
 
   /**
-   * NEW: Check if title contains character information
+   * FIXED: Check if title contains a valid Dofus class name
+   */
+  containsValidDofusClass(title) {
+    if (!title) return false;
+    
+    const lowerTitle = title.toLowerCase();
+    
+    // Check for exact class matches in the title
+    for (const className of Object.keys(this.dofusClasses)) {
+      if (lowerTitle.includes(className.toLowerCase())) {
+        console.log(`WindowManagerWindows: Found valid class "${className}" in title "${title}"`);
+        return true;
+      }
+    }
+    
+    // Check for class name mappings
+    for (const [mapping, className] of Object.entries(this.classNameMappings)) {
+      if (lowerTitle.includes(mapping.toLowerCase())) {
+        console.log(`WindowManagerWindows: Found valid class mapping "${mapping}" -> "${className}" in title "${title}"`);
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if title contains character information
    */
   hasCharacterInfo(title) {
     // Look for character-class patterns
@@ -294,8 +326,8 @@ class WindowManagerWindows {
    */
   async detectByExecutableName() {
     try {
-      // CORRECTED: PowerShell command to find processes with Dofus executable pattern
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Get-Process | Where-Object { $_.ProcessName -match '^dofus' -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64(); Path = try { $_.Path } catch { 'Unknown' } } } | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
+      // FIXED: Simplified PowerShell command
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.ProcessName -match '^dofus' -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress"`;
       
       const { stdout, stderr } = await execAsync(command, { 
         timeout: 2000,
@@ -329,12 +361,12 @@ class WindowManagerWindows {
   }
 
   /**
-   * ENHANCED: Detect by window class (UnityWndClass)
+   * FIXED: Detect by window class (UnityWndClass) with improved PowerShell
    */
   async detectByWindowClass() {
     try {
-      // PowerShell command to find windows with UnityWndClass
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public class Win32Class { [DllImport(\\"user32.dll\\", SetLastError = true, CharSet = CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); [DllImport(\\"user32.dll\\")] public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam); [DllImport(\\"user32.dll\\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId); [DllImport(\\"user32.dll\\")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount); public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam); }'; $windows = @(); [Win32Class]::EnumWindows({ param($hwnd, $lParam) $className = New-Object System.Text.StringBuilder 256; [Win32Class]::GetClassName($hwnd, $className, $className.Capacity); if ($className.ToString() -eq 'UnityWndClass') { $title = New-Object System.Text.StringBuilder 256; [Win32Class]::GetWindowText($hwnd, $title, $title.Capacity); $processId = 0; [Win32Class]::GetWindowThreadProcessId($hwnd, [ref]$processId); if ($title.Length -gt 0 -and $processId -gt 0) { try { $process = Get-Process -Id $processId -ErrorAction Stop; $script:windows += [PSCustomObject]@{ Id = $processId; ProcessName = $process.ProcessName; Title = $title.ToString(); Handle = $hwnd.ToInt64(); ClassName = $className.ToString() } } catch {} } } return $true }, [IntPtr]::Zero); $windows | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
+      // FIXED: Simplified PowerShell command for UnityWndClass
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public class Win32 { [DllImport(\\"user32.dll\\", SetLastError = true, CharSet = CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); [DllImport(\\"user32.dll\\")] public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam); [DllImport(\\"user32.dll\\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId); [DllImport(\\"user32.dll\\")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount); public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam); }'; $windows = @(); [Win32]::EnumWindows({ param($hwnd, $lParam) $className = New-Object System.Text.StringBuilder 256; [Win32]::GetClassName($hwnd, $className, $className.Capacity); if ($className.ToString() -eq 'UnityWndClass') { $title = New-Object System.Text.StringBuilder 256; [Win32]::GetWindowText($hwnd, $title, $title.Capacity); $processId = 0; [Win32]::GetWindowThreadProcessId($hwnd, [ref]$processId); if ($title.Length -gt 0 -and $processId -gt 0) { try { $process = Get-Process -Id $processId -ErrorAction Stop; $script:windows += [PSCustomObject]@{ Id = $processId; ProcessName = $process.ProcessName; Title = $title.ToString(); Handle = $hwnd.ToInt64() } } catch {} } } return $true }, [IntPtr]::Zero); $windows | ConvertTo-Json -Compress"`;
       
       const { stdout, stderr } = await execAsync(command, { 
         timeout: 3000,
@@ -373,7 +405,7 @@ class WindowManagerWindows {
   async detectByProcessName() {
     try {
       // Look for common Dofus process names
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Get-Process | Where-Object { ($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*' -or $_.ProcessName -like '*ankama*') -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { ($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*' -or $_.ProcessName -like '*ankama*') -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress"`;
       
       const { stdout, stderr } = await execAsync(command, { 
         timeout: 2000,
@@ -412,7 +444,7 @@ class WindowManagerWindows {
   async detectByWindowTitle() {
     try {
       // Look for windows with Dofus-like titles
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Get-Process | Where-Object { $_.MainWindowTitle -match '(dofus|steamer|boulonix|ankama)' -and $_.MainWindowHandle -ne 0 } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.MainWindowTitle -match '(dofus|steamer|boulonix|ankama)' -and $_.MainWindowHandle -ne 0 } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress"`;
       
       const { stdout, stderr } = await execAsync(command, { 
         timeout: 2000,
@@ -760,7 +792,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * NEW: Get actual screen dimensions
+   * Get actual screen dimensions
    */
   async getScreenDimensions() {
     try {
@@ -851,7 +883,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * NEW: Performance statistics tracking
+   * Performance statistics tracking
    */
   updateDetectionStats(duration) {
     this.performanceStats.detectionCount++;
@@ -897,7 +929,7 @@ class WindowManagerWindows {
     }
   }
 
-  // OPTIMIZED: Storage methods with better error handling and caching
+  // Storage methods with better error handling and caching
   getStoredCustomName(windowId) {
     try {
       const Store = require('electron-store');
@@ -949,7 +981,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * OPTIMIZED: Enhanced cleanup with performance stats
+   * Enhanced cleanup with performance stats
    */
   cleanup() {
     try {
