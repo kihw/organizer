@@ -2,6 +2,10 @@
  * UltraFastWindowManagerWindows - Activation de fenêtres ultra-rapide
  * Objectif: <100ms d'activation (vs 1000ms+ actuellement)
  */
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
+
 class UltraFastWindowManagerWindows {
   constructor() {
     this.windows = new Map();
@@ -151,11 +155,7 @@ class UltraFastWindowManagerWindows {
       // PowerShell ultra-optimisé avec timeout très court
       const command = `powershell.exe -NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);[DllImport(\\"user32.dll\\")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(\\"user32.dll\\")]public static extern bool BringWindowToTop(IntPtr hWnd);}';$h=[IntPtr]${handle};[Win32]::ShowWindow($h,9);[Win32]::BringWindowToTop($h);[Win32]::SetForegroundWindow($h)"`;
       
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      await execAsync(command, { 
+      await execAsync(command, {
         timeout: 500, // 500ms max
         encoding: 'utf8',
         windowsHide: true,
@@ -181,11 +181,7 @@ class UltraFastWindowManagerWindows {
       // Version ultra-compacte et rapide
       const command = `powershell.exe -NoProfile -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');[System.Windows.Forms.SendKeys]::SendWait('%{TAB}');Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class W{[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr h);}';[W]::SetForegroundWindow([IntPtr]${handle})"`;
       
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      await execAsync(command, { 
+      await execAsync(command, {
         timeout: 300, // 300ms max
         encoding: 'utf8',
         windowsHide: true
@@ -210,11 +206,7 @@ class UltraFastWindowManagerWindows {
       // Utiliser une approche différente avec SendKeys
       const command = `powershell.exe -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms;Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);}';[Win32]::SetForegroundWindow([IntPtr]${handle});Start-Sleep -Milliseconds 50;[System.Windows.Forms.SendKeys]::SendWait('{ESC}')"`;
       
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      await execAsync(command, { 
+      await execAsync(command, {
         timeout: 400, // 400ms max
         encoding: 'utf8',
         windowsHide: true
@@ -239,11 +231,7 @@ class UltraFastWindowManagerWindows {
       // Méthode simple mais fiable
       const command = `powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');[System.Windows.Forms.SendKeys]::SendWait('%{TAB}');Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);}';[Win32]::SetForegroundWindow([IntPtr]${handle})"`;
       
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      await execAsync(command, { 
+      await execAsync(command, {
         timeout: 1000, // 1s max pour le fallback
         encoding: 'utf8',
         windowsHide: true
@@ -302,11 +290,7 @@ class UltraFastWindowManagerWindows {
       // Commande PowerShell ultra-optimisée pour la détection
       const command = `powershell.exe -NoProfile -Command "Get-Process|Where-Object{($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*') -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne ''}|ForEach-Object{[PSCustomObject]@{Id=$_.Id;ProcessName=$_.ProcessName;Title=$_.MainWindowTitle;Handle=$_.MainWindowHandle.ToInt64()}}|ConvertTo-Json -Compress"`;
       
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      const { stdout } = await execAsync(command, { 
+      const { stdout } = await execAsync(command, {
         timeout: 2000, // 2s max pour la détection
         encoding: 'utf8',
         windowsHide: true
