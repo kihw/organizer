@@ -13,7 +13,7 @@ class WindowManagerWindows {
     this.windowIdMapping = new Map(); // ID stable -> handle string
     this.realWindowHandles = new Map(); // ID stable -> handle numérique RÉEL
     this.activationScriptPath = null;
-    this.fastActivationScript = null; // NOUVEAU: Script ultra-rapide
+    this.fastActivationScript = null;
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -57,73 +57,73 @@ class WindowManagerWindows {
   }
 
   /**
-   * NOUVEAU: Scripts PowerShell ultra-optimisés pour activation rapide
+   * FIXED: Scripts PowerShell ultra-optimisés et fonctionnels
    */
   async createOptimizedActivationScripts() {
     try {
-      // Script ultra-rapide (méthode principale)
+      // Script ultra-rapide CORRIGÉ
       const fastScriptContent = `
 param([string]$Handle)
-
-# Définition des APIs Windows en une seule fois
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class FastWin32 {
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(uint dwProcessId);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-    public const int SW_RESTORE = 9;
-}
-"@
 
 try {
     # Conversion rapide du handle
     $hwnd = [IntPtr]::new([long]$Handle)
     
+    # Définition des APIs Windows optimisée
+    $signature = @'
+[DllImport("user32.dll")]
+public static extern bool SetForegroundWindow(IntPtr hWnd);
+[DllImport("user32.dll")]
+public static extern bool BringWindowToTop(IntPtr hWnd);
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("user32.dll")]
+public static extern bool IsIconic(IntPtr hWnd);
+[DllImport("user32.dll")]
+public static extern bool IsWindow(IntPtr hWnd);
+'@
+
+    Add-Type -MemberDefinition $signature -Name Win32API -Namespace FastActivation
+    
     # Vérification rapide
-    if (-not [FastWin32]::IsWindow($hwnd)) { return $false }
-    
-    # Obtenir le PID pour AllowSetForegroundWindow
-    $processId = 0
-    [FastWin32]::GetWindowThreadProcessId($hwnd, [ref]$processId)
-    
-    # Permettre l'activation
-    if ($processId -gt 0) {
-        [FastWin32]::AllowSetForegroundWindow($processId)
+    if (-not [FastActivation.Win32API]::IsWindow($hwnd)) { 
+        Write-Output "False"
+        exit 1
     }
     
-    # Restaurer si minimisée (rapide)
-    if ([FastWin32]::IsIconic($hwnd)) {
-        [FastWin32]::ShowWindow($hwnd, 9)
+    # Restaurer si minimisée
+    if ([FastActivation.Win32API]::IsIconic($hwnd)) {
+        [FastActivation.Win32API]::ShowWindow($hwnd, 9) | Out-Null
     }
     
     # Activation ultra-rapide
-    [FastWin32]::BringWindowToTop($hwnd)
-    $result = [FastWin32]::SetForegroundWindow($hwnd)
+    [FastActivation.Win32API]::BringWindowToTop($hwnd) | Out-Null
+    $result = [FastActivation.Win32API]::SetForegroundWindow($hwnd)
     
-    return $result
+    Write-Output $result.ToString()
     
 } catch {
-    return $false
+    Write-Output "False"
+    exit 1
 }
 `;
 
-      // Script de secours (encore plus simple)
+      // Script de secours CORRIGÉ
       const backupScriptContent = `
 param([string]$Handle)
-Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class SimpleWin32 { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'
+
 try {
-    $result = [SimpleWin32]::SetForegroundWindow([IntPtr]::new([long]$Handle))
-    return $result
+    $signature = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'
+    Add-Type -MemberDefinition $signature -Name SimpleWin32 -Namespace Backup
+    
+    $hwnd = [IntPtr]::new([long]$Handle)
+    $result = [Backup.SimpleWin32]::SetForegroundWindow($hwnd)
+    
+    Write-Output $result.ToString()
+    
 } catch {
-    return $false
+    Write-Output "False"
+    exit 1
 }
 `;
 
@@ -134,10 +134,10 @@ try {
       fs.writeFileSync(this.fastActivationScript, fastScriptContent, 'utf8');
       fs.writeFileSync(this.activationScriptPath, backupScriptContent, 'utf8');
       
-      console.log('WindowManagerWindows: Created ULTRA-FAST activation scripts');
+      console.log('WindowManagerWindows: Created FIXED activation scripts');
       return true;
     } catch (error) {
-      console.error('WindowManagerWindows: Failed to create fast activation scripts:', error);
+      console.error('WindowManagerWindows: Failed to create activation scripts:', error);
       return false;
     }
   }
@@ -518,7 +518,7 @@ try {
   }
 
   /**
-   * NOUVEAU: Activation ultra-rapide avec méthodes optimisées
+   * FIXED: Activation ultra-rapide avec scripts PowerShell corrigés
    */
   async activateWindow(windowId) {
     try {
@@ -566,49 +566,49 @@ try {
         }
       }
       
-      // MÉTHODE 1: Script ultra-rapide (priorité absolue)
+      // MÉTHODE 1: Script ultra-rapide CORRIGÉ (priorité absolue)
       if (this.fastActivationScript && fs.existsSync(this.fastActivationScript)) {
         try {
-          console.log(`WindowManagerWindows: Using ULTRA-FAST script for ${windowId}`);
+          console.log(`WindowManagerWindows: Using FIXED ULTRA-FAST script for ${windowId}`);
           
-          const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.fastActivationScript}" -Handle "${realHandle}"`;
+          const command = `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "${this.fastActivationScript}" -Handle "${realHandle}"`;
           
-          const { stdout, stderr } = await execAsync(command, { timeout: 800 }); // Timeout réduit à 800ms
+          const { stdout, stderr } = await execAsync(command, { timeout: 500 }); // Timeout réduit
           
           if (stderr && stderr.trim()) {
             console.warn(`WindowManagerWindows: Fast script stderr: ${stderr}`);
           }
           
-          const success = stdout.includes('True') || stdout.includes('$true');
+          const success = stdout.trim() === 'True';
           
           if (success) {
             this.activationCache.set(cacheKey, now);
             this.updateActiveState(windowId);
-            console.log(`WindowManagerWindows: ULTRA-FAST script SUCCESS for ${windowId}`);
+            console.log(`WindowManagerWindows: FIXED ULTRA-FAST script SUCCESS for ${windowId}`);
             return true;
           } else {
-            console.warn(`WindowManagerWindows: Fast script failed for ${windowId}, trying backup...`);
+            console.warn(`WindowManagerWindows: Fast script returned: ${stdout.trim()}, trying backup...`);
           }
         } catch (fastError) {
           console.warn(`WindowManagerWindows: Fast script error: ${fastError.message}, trying backup...`);
         }
       }
       
-      // MÉTHODE 2: Script de secours (simple et rapide)
+      // MÉTHODE 2: Script de secours CORRIGÉ (simple et rapide)
       if (this.activationScriptPath && fs.existsSync(this.activationScriptPath)) {
         try {
-          console.log(`WindowManagerWindows: Using backup script for ${windowId}`);
+          console.log(`WindowManagerWindows: Using FIXED backup script for ${windowId}`);
           
-          const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.activationScriptPath}" -Handle "${realHandle}"`;
+          const command = `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "${this.activationScriptPath}" -Handle "${realHandle}"`;
           
-          const { stdout } = await execAsync(command, { timeout: 500 }); // Timeout très court
+          const { stdout } = await execAsync(command, { timeout: 300 }); // Timeout très court
           
-          const success = stdout.includes('True') || stdout.includes('$true');
+          const success = stdout.trim() === 'True';
           
           if (success) {
             this.activationCache.set(cacheKey, now);
             this.updateActiveState(windowId);
-            console.log(`WindowManagerWindows: Backup script SUCCESS for ${windowId}`);
+            console.log(`WindowManagerWindows: FIXED backup script SUCCESS for ${windowId}`);
             return true;
           }
         } catch (backupError) {
@@ -616,21 +616,21 @@ try {
         }
       }
       
-      // MÉTHODE 3: Commande PowerShell inline ultra-simple
+      // MÉTHODE 3: Commande PowerShell inline CORRIGÉE
       try {
-        console.log(`WindowManagerWindows: Using inline PowerShell for ${windowId}`);
+        console.log(`WindowManagerWindows: Using FIXED inline PowerShell for ${windowId}`);
         
-        // Commande ultra-simplifiée
-        const command = `powershell.exe -Command "[System.Runtime.InteropServices.DllImport('user32.dll')] param(); Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace User32; [User32.Win32]::SetForegroundWindow([IntPtr]${realHandle})"`;
+        // Commande ultra-simplifiée et corrigée
+        const command = `powershell.exe -Command "Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace User32; [User32.Win32]::SetForegroundWindow([IntPtr]${realHandle})"`;
         
-        const { stdout } = await execAsync(command, { timeout: 300 }); // Timeout ultra-court
+        const { stdout } = await execAsync(command, { timeout: 200 }); // Timeout ultra-court
         
-        const success = stdout.includes('True') || stdout.trim() === 'True';
+        const success = stdout.trim() === 'True';
         
         if (success) {
           this.activationCache.set(cacheKey, now);
           this.updateActiveState(windowId);
-          console.log(`WindowManagerWindows: Inline PowerShell SUCCESS for ${windowId}`);
+          console.log(`WindowManagerWindows: FIXED inline PowerShell SUCCESS for ${windowId}`);
           return true;
         }
       } catch (inlineError) {
@@ -647,7 +647,7 @@ try {
         if (pid && pid !== '0') {
           const command = `powershell.exe -Command "$shell = New-Object -ComObject WScript.Shell; $shell.AppActivate(${pid})"`;
           
-          await execAsync(command, { timeout: 200 }); // Timeout ultra-court
+          await execAsync(command, { timeout: 150 }); // Timeout ultra-court
           
           this.activationCache.set(cacheKey, now);
           this.updateActiveState(windowId);
@@ -659,11 +659,11 @@ try {
       }
       
       // Si toutes les méthodes ont échoué
-      console.error(`WindowManagerWindows: ALL ULTRA-FAST methods failed for ${windowId}`);
+      console.error(`WindowManagerWindows: ALL FIXED methods failed for ${windowId}`);
       return false;
       
     } catch (error) {
-      console.error('WindowManagerWindows: Critical ultra-fast activation error:', error.message);
+      console.error('WindowManagerWindows: Critical activation error:', error.message);
       return false;
     }
   }
