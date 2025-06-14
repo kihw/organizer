@@ -7,8 +7,8 @@ class WindowManagerWindows {
     this.windows = new Map();
     this.lastWindowCheck = 0;
     this.activationCache = new Map();
-    this.windowIdMapping = new Map();
-    this.realWindowHandles = new Map();
+    this.windowIdMapping = new Map(); // ID stable -> handle string
+    this.realWindowHandles = new Map(); // ID stable -> handle numérique RÉEL
     this.quickActivationEnabled = true;
     this.detectionMethods = [];
     this.activationMethods = [];
@@ -678,12 +678,17 @@ class WindowManagerWindows {
       // Parse character info from title
       const { character, dofusClass } = this.parseWindowTitle(rawWindow.Title);
       
-      // Generate stable ID
+      // CORRECTION CRITIQUE: Générer l'ID stable de façon cohérente
       const stableId = this.generateStableWindowId(character, dofusClass, rawWindow.ProcessId || windowHandle);
       
-      // CRITIQUE: Stocker le VRAI handle Windows
+      // CORRECTION MAJEURE: Stocker TOUS les mappings nécessaires
       this.windowIdMapping.set(stableId, windowHandle);
       this.realWindowHandles.set(stableId, rawWindow.Handle);
+      
+      // NOUVEAU: Stocker aussi les mappings inverses pour compatibilité
+      this.windowIdMapping.set(`fallback_${character.toLowerCase()}_${dofusClass}`, windowHandle);
+      this.realWindowHandles.set(`fallback_${character.toLowerCase()}_${dofusClass}`, rawWindow.Handle);
+      
       currentWindowIds.add(stableId);
       
       // Get stored class or use detected class
@@ -713,6 +718,8 @@ class WindowManagerWindows {
       this.windows.set(stableId, { info: windowInfo });
       
       console.log(`WindowManagerWindows: Processed window ${stableId} with REAL handle ${rawWindow.Handle}`);
+      console.log(`WindowManagerWindows: Mapped ${stableId} -> handle ${rawWindow.Handle}`);
+      console.log(`WindowManagerWindows: Also mapped fallback_${character.toLowerCase()}_${dofusClass} -> handle ${rawWindow.Handle}`);
     }
     
     // Remove windows that no longer exist
@@ -842,11 +849,32 @@ class WindowManagerWindows {
     try {
       console.log(`WindowManagerWindows: REAL activation for ${windowId} (NO SIMULATION)`);
       
-      // Obtenir le VRAI handle Windows
-      const realHandle = this.realWindowHandles.get(windowId);
+      // CORRECTION CRITIQUE: Chercher le handle dans tous les mappings possibles
+      let realHandle = this.realWindowHandles.get(windowId);
+      
+      if (!realHandle || realHandle === 0) {
+        console.log(`WindowManagerWindows: No direct handle for ${windowId}, checking alternative mappings...`);
+        
+        // Essayer les mappings alternatifs
+        const alternativeIds = [
+          windowId,
+          windowId.replace('fallback_', ''),
+          `fallback_${windowId}`,
+          windowId.replace(/_\d+$/, '') // Enlever le PID à la fin
+        ];
+        
+        for (const altId of alternativeIds) {
+          realHandle = this.realWindowHandles.get(altId);
+          if (realHandle && realHandle !== 0) {
+            console.log(`WindowManagerWindows: Found handle ${realHandle} using alternative ID ${altId}`);
+            break;
+          }
+        }
+      }
       
       if (!realHandle || realHandle === 0) {
         console.error(`WindowManagerWindows: NO REAL HANDLE found for ${windowId} - CANNOT ACTIVATE`);
+        console.log('WindowManagerWindows: Available handles:', Array.from(this.realWindowHandles.entries()));
         return false;
       }
       
@@ -1068,7 +1096,26 @@ class WindowManagerWindows {
 
   async moveWindow(windowId, x, y, width = -1, height = -1) {
     try {
-      const realHandle = this.realWindowHandles.get(windowId);
+      // CORRECTION: Chercher le handle dans tous les mappings possibles
+      let realHandle = this.realWindowHandles.get(windowId);
+      
+      if (!realHandle || realHandle === 0) {
+        // Essayer les mappings alternatifs
+        const alternativeIds = [
+          windowId,
+          windowId.replace('fallback_', ''),
+          `fallback_${windowId}`,
+          windowId.replace(/_\d+$/, '') // Enlever le PID à la fin
+        ];
+        
+        for (const altId of alternativeIds) {
+          realHandle = this.realWindowHandles.get(altId);
+          if (realHandle && realHandle !== 0) {
+            console.log(`WindowManagerWindows: Found handle ${realHandle} for move using alternative ID ${altId}`);
+            break;
+          }
+        }
+      }
       
       if (!realHandle || realHandle === 0) {
         console.log(`WindowManagerWindows: No REAL handle found for move operation: ${windowId}`);
