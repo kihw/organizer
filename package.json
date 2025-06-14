@@ -6,6 +6,10 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "start:optimized": "electron src/main-optimized.js",
+    "dev:optimized": "electron src/main-optimized.js --dev",
+    "start:ultra-fast": "electron src/main-ultra-fast.js",
+    "dev:ultra-fast": "electron src/main-ultra-fast.js --dev",
     "build": "electron-builder",
     "build-win": "electron-builder --win",
     "build-linux": "electron-builder --linux",
@@ -18,6 +22,7 @@
     "test": "jest",
     "test:performance": "node tests/performance.js",
     "benchmark": "node tests/benchmark.js",
+    "benchmark:ultra-fast": "node tests/benchmark-ultra-fast.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix"
   },
@@ -31,6 +36,7 @@
     "cross-platform",
     "performance",
     "shortcuts",
+    "ultra-fast",
     "v2.0"
   ],
   "author": {
