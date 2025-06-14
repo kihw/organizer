@@ -171,7 +171,9 @@ class DofusOrganizer {
       },
       icon: path.join(__dirname, '../assets/icons/organizer.png'),
       title: 'Dofus Organizer - Configuration',
-      show: false
+      show: false,
+      frame: false,  // Remove title bar and menu bar
+      titleBarStyle: 'hidden'  // Hide title bar on macOS
     });
 
     this.mainWindow.loadFile(path.join(__dirname, 'renderer/config.html'));
@@ -366,9 +368,16 @@ class DofusOrganizer {
       }
     });
     
-    ipcMain.handle('activate-window', (event, windowId) => {
+    ipcMain.handle('activate-window', async (event, windowId) => {
       console.log(`IPC: activate-window called for: ${windowId}`);
-      return this.windowManager.activateWindow(windowId);
+      const result = await this.windowManager.activateWindow(windowId);
+      
+      // Add a small delay to ensure window activation completes
+      if (result) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      return result;
     });
     
     ipcMain.handle('refresh-windows', () => {
@@ -378,6 +387,13 @@ class DofusOrganizer {
     
     ipcMain.handle('set-shortcut', (event, windowId, shortcut) => {
       console.log(`IPC: set-shortcut called for ${windowId}: ${shortcut}`);
+      
+      // Validate shortcut before setting
+      if (!this.shortcutManager.validateShortcut(shortcut)) {
+        console.warn(`IPC: Invalid or conflicting shortcut: ${shortcut}`);
+        return false;
+      }
+      
       return this.shortcutManager.setWindowShortcut(windowId, shortcut, () => {
         this.windowManager.activateWindow(windowId);
       });
