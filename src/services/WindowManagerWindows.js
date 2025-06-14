@@ -8,6 +8,7 @@ class WindowManagerWindows {
     this.lastWindowCheck = 0;
     this.psScriptPath = null;
     this.psScriptReady = false;
+    this.activationCache = new Map(); // Cache for faster activation
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -73,9 +74,9 @@ class WindowManagerWindows {
   }
 
   async initializePowerShell() {
-    // Create an improved PowerShell script for window operations
+    // Create an optimized PowerShell script for ultra-fast window activation
     const script = `
-# Dofus Organizer Windows Management Script - Enhanced Version
+# Dofus Organizer Windows Management Script - Ultra-Fast Version
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
@@ -137,6 +138,9 @@ public class WindowsAPI {
     [DllImport("user32.dll")]
     public static extern bool SetFocus(IntPtr hWnd);
     
+    [DllImport("user32.dll")]
+    public static extern bool SwitchToThisWindow(IntPtr hWnd, bool fUnknown);
+    
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     
     public struct RECT {
@@ -154,7 +158,6 @@ public class WindowsAPI {
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_SHOWWINDOW = 0x0040;
     
-    // Fixed: Use static readonly instead of const for IntPtr
     public static readonly IntPtr HWND_TOP = new IntPtr(0);
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
 }
@@ -164,7 +167,7 @@ function Get-DofusWindows {
     $windows = @()
     $dofusProcesses = @()
     
-    # First, get all Dofus-related processes
+    # Get all Dofus-related processes
     try {
         $dofusProcesses = Get-Process | Where-Object { 
             $_.ProcessName -match "Dofus|dofus|java" -and 
@@ -248,69 +251,32 @@ function Activate-Window {
     
     $hwnd = [IntPtr]$Handle
     try {
-        # Enhanced window activation process with multiple techniques
+        # Ultra-fast activation method - minimal delays
         $processId = 0
         [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$processId)
         
         # Allow this process to set foreground window
         [WindowsAPI]::AllowSetForegroundWindow($processId)
-        Start-Sleep -Milliseconds 50
         
-        # Get current thread and window thread
-        $currentThread = [WindowsAPI]::GetCurrentThreadId()
-        $windowThread = 0
-        [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$windowThread)
-        
-        # Attach to the window's thread if different
-        $attached = $false
-        if ($windowThread -ne $currentThread) {
-            $attached = [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $true)
+        # Restore if minimized
+        if ([WindowsAPI]::IsIconic($hwnd)) {
+            [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
         }
         
-        try {
-            # Step 1: Restore if minimized
-            if ([WindowsAPI]::IsIconic($hwnd)) {
-                [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
-                Start-Sleep -Milliseconds 200
-            }
-            
-            # Step 2: Show the window
-            [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_SHOW)
-            Start-Sleep -Milliseconds 100
-            
-            # Step 3: Bring to top
-            [WindowsAPI]::BringWindowToTop($hwnd)
-            Start-Sleep -Milliseconds 100
-            
-            # Step 4: Set as foreground window
-            $result1 = [WindowsAPI]::SetForegroundWindow($hwnd)
-            Start-Sleep -Milliseconds 100
-            
-            # Step 5: Set as active window
-            $result2 = [WindowsAPI]::SetActiveWindow($hwnd)
-            Start-Sleep -Milliseconds 100
-            
-            # Step 6: Set focus
-            [WindowsAPI]::SetFocus($hwnd)
-            Start-Sleep -Milliseconds 100
-            
-            # Step 7: Ensure it's on top with show flag
-            [WindowsAPI]::SetWindowPos($hwnd, [WindowsAPI]::HWND_TOP, 0, 0, 0, 0, 
-                                      [WindowsAPI]::SWP_NOMOVE -bor [WindowsAPI]::SWP_NOSIZE -bor [WindowsAPI]::SWP_SHOWWINDOW)
-            
-            # Final verification
-            $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
-            $success = $hwnd -eq $foregroundWindow
-            
-            Write-Host "Activation results: SetForegroundWindow=$result1, SetActiveWindow=$result2, FinalCheck=$success"
-            
-            return $success
-        } finally {
-            # Detach from thread if we attached
-            if ($attached) {
-                [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $false)
-            }
-        }
+        # Use SwitchToThisWindow for fastest activation
+        [WindowsAPI]::SwitchToThisWindow($hwnd, $true)
+        
+        # Bring to top
+        [WindowsAPI]::BringWindowToTop($hwnd)
+        
+        # Set as foreground
+        $result = [WindowsAPI]::SetForegroundWindow($hwnd)
+        
+        # Final verification
+        $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
+        $success = $hwnd -eq $foregroundWindow
+        
+        return $success
     } catch {
         Write-Error "Failed to activate window: $_"
         return $false
@@ -797,9 +763,21 @@ try {
     try {
       console.log(`WindowManagerWindows: Activating window ${windowId}`);
       
+      // Check cache first for faster activation
+      const cacheKey = windowId;
+      const now = Date.now();
+      
+      if (this.activationCache.has(cacheKey)) {
+        const lastActivation = this.activationCache.get(cacheKey);
+        if (now - lastActivation < 500) { // 500ms cooldown
+          console.log(`WindowManagerWindows: Activation cooldown active for ${windowId}`);
+          return true;
+        }
+      }
+      
       if (this.psScriptReady && this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
         const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" activate "${windowId}"`;
-        const { stdout, stderr } = await execAsync(command, { timeout: 8000 }); // Increased timeout
+        const { stdout, stderr } = await execAsync(command, { timeout: 3000 }); // Reduced timeout for speed
         
         if (stderr && stderr.trim()) {
           console.warn(`WindowManagerWindows: PowerShell activation stderr: ${stderr}`);
@@ -809,8 +787,14 @@ try {
         console.log(`WindowManagerWindows: PowerShell activation result: ${success}`);
         
         if (success) {
-          // Add additional delay for window activation to complete
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Cache successful activation
+          this.activationCache.set(cacheKey, now);
+          
+          // Clean up old cache entries
+          if (this.activationCache.size > 50) {
+            const oldestKey = this.activationCache.keys().next().value;
+            this.activationCache.delete(oldestKey);
+          }
         }
         
         return success;
@@ -833,7 +817,7 @@ try {
         if (processId) {
           // Try to focus using process ID
           const command = `powershell.exe -Command "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::AppActivate(${processId})"`;
-          await execAsync(command, { timeout: 3000 });
+          await execAsync(command, { timeout: 2000 }); // Reduced timeout
           return true;
         }
       }
@@ -1029,6 +1013,9 @@ try {
         console.warn('WindowManagerWindows: Error cleaning up PowerShell script:', error);
       }
     }
+    
+    // Clear activation cache
+    this.activationCache.clear();
   }
 }
 

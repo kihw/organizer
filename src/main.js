@@ -29,6 +29,7 @@ class DofusOrganizer {
       nextWindow: null,
       toggleShortcuts: null
     };
+    this.isTogglingShortcuts = false; // Prevent infinite loops
     
     console.log('DofusOrganizer: Initializing application...');
     this.initializeApp();
@@ -310,22 +311,37 @@ class DofusOrganizer {
 
   // New method: Toggle shortcuts on/off
   toggleShortcuts() {
-    this.shortcutsEnabled = !this.shortcutsEnabled;
-    this.store.set('shortcutsEnabled', this.shortcutsEnabled);
-    
-    if (this.shortcutsEnabled && !this.isConfiguring) {
-      this.activateShortcuts();
-      console.log('DofusOrganizer: Shortcuts enabled');
-    } else {
-      this.deactivateShortcuts();
-      console.log('DofusOrganizer: Shortcuts disabled');
+    // Prevent infinite loops
+    if (this.isTogglingShortcuts) {
+      console.log('DofusOrganizer: Toggle already in progress, ignoring...');
+      return;
     }
     
-    this.updateTrayMenu();
+    this.isTogglingShortcuts = true;
     
-    // Notify user
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send('shortcuts-toggled', this.shortcutsEnabled);
+    try {
+      this.shortcutsEnabled = !this.shortcutsEnabled;
+      this.store.set('shortcutsEnabled', this.shortcutsEnabled);
+      
+      console.log(`DofusOrganizer: Shortcuts ${this.shortcutsEnabled ? 'enabled' : 'disabled'}`);
+      
+      if (this.shortcutsEnabled && !this.isConfiguring) {
+        this.activateShortcuts();
+      } else {
+        this.deactivateShortcuts();
+      }
+      
+      this.updateTrayMenu();
+      
+      // Notify user
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('shortcuts-toggled', this.shortcutsEnabled);
+      }
+    } finally {
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        this.isTogglingShortcuts = false;
+      }, 500);
     }
   }
 
@@ -338,13 +354,12 @@ class DofusOrganizer {
       const nextWindowShortcut = this.store.get('globalShortcuts.nextWindow');
       const toggleShortcutsShortcut = this.store.get('globalShortcuts.toggleShortcuts');
       
-      if (nextWindowShortcut) {
+      // Register next window shortcut (only when shortcuts are enabled)
+      if (nextWindowShortcut && this.shortcutsEnabled) {
         const accelerator = this.shortcutManager.convertShortcutToAccelerator(nextWindowShortcut);
         if (accelerator) {
           const success = globalShortcut.register(accelerator, () => {
-            if (this.shortcutsEnabled) {
-              this.activateNextWindow();
-            }
+            this.activateNextWindow();
           });
           
           if (success) {
@@ -356,7 +371,7 @@ class DofusOrganizer {
         }
       }
       
-      // IMPORTANT: Toggle shortcuts shortcut should ALWAYS work, regardless of shortcuts enabled state
+      // CRITICAL: Toggle shortcuts shortcut should ALWAYS work
       if (toggleShortcutsShortcut) {
         const accelerator = this.shortcutManager.convertShortcutToAccelerator(toggleShortcutsShortcut);
         if (accelerator) {
@@ -471,17 +486,14 @@ class DofusOrganizer {
       try {
         const result = await this.windowManager.activateWindow(windowId);
         
-        // Enhanced activation with retry mechanism
+        // Enhanced activation with immediate feedback
         if (result) {
-          // Add a delay to ensure window activation completes
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Update the active state in our local data
+          // Update the active state in our local data immediately
           this.dofusWindows.forEach(w => {
             w.isActive = w.id === windowId;
           });
           
-          // Notify all windows about the state change
+          // Notify all windows about the state change immediately
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
           }
@@ -605,16 +617,6 @@ class DofusOrganizer {
     this.shortcutsEnabled = this.store.get('shortcutsEnabled', true);
     console.log(`DofusOrganizer: Shortcuts enabled: ${this.shortcutsEnabled}`);
     
-    // Load and register shortcuts
-    const shortcuts = this.store.get('shortcuts', {});
-    console.log(`DofusOrganizer: Loading ${Object.keys(shortcuts).length} shortcuts`);
-    Object.keys(shortcuts).forEach(windowId => {
-      this.shortcutManager.setWindowShortcut(windowId, shortcuts[windowId], async () => {
-        console.log(`ShortcutManager: Executing shortcut for window ${windowId}`);
-        await this.windowManager.activateWindow(windowId);
-      });
-    });
-
     // Set default global shortcuts if not set
     if (!this.store.get('globalShortcuts.nextWindow')) {
       this.store.set('globalShortcuts.nextWindow', 'Ctrl+Tab');
@@ -623,8 +625,18 @@ class DofusOrganizer {
       this.store.set('globalShortcuts.toggleShortcuts', 'Ctrl+Shift+D');
     }
 
-    // Register global shortcuts
+    // Register global shortcuts FIRST
     this.registerGlobalShortcuts();
+    
+    // Load and register window shortcuts
+    const shortcuts = this.store.get('shortcuts', {});
+    console.log(`DofusOrganizer: Loading ${Object.keys(shortcuts).length} window shortcuts`);
+    Object.keys(shortcuts).forEach(windowId => {
+      this.shortcutManager.setWindowShortcut(windowId, shortcuts[windowId], async () => {
+        console.log(`ShortcutManager: Executing shortcut for window ${windowId}`);
+        await this.windowManager.activateWindow(windowId);
+      });
+    });
   }
 
   startWindowMonitoring() {
@@ -732,7 +744,7 @@ class DofusOrganizer {
     if (this.shortcutsEnabled) {
       console.log('DofusOrganizer: Activating shortcuts');
       this.shortcutManager.activateAll();
-      // Re-register global shortcuts (but toggle shortcut always stays active)
+      // Re-register global shortcuts
       this.registerGlobalShortcuts();
     }
   }
