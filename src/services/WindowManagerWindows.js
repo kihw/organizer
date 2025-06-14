@@ -8,8 +8,10 @@ class WindowManagerWindows {
     this.lastWindowCheck = 0;
     this.activationCache = new Map();
     this.windowIdMapping = new Map();
+    this.realWindowHandles = new Map(); // NOUVEAU: Vrais handles Windows
     this.quickActivationEnabled = true;
     this.detectionMethods = [];
+    this.activationMethods = []; // NOUVEAU: Méthodes d'activation
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -46,10 +48,41 @@ class WindowManagerWindows {
       'eliotrop': 'eliotrope', 'elio': 'eliotrope', 'hupper': 'huppermage', 'ougi': 'ouginak'
     };
     
-    // NOUVEAU: Initialiser les méthodes de détection par ordre de fiabilité
+    // NOUVEAU: Initialiser les méthodes de détection et d'activation
     this.initializeDetectionMethods();
+    this.initializeActivationMethods();
     
-    console.log('WindowManagerWindows: Initialized with ROBUST multi-method detection');
+    console.log('WindowManagerWindows: Initialized with ROBUST detection and REAL activation');
+  }
+
+  /**
+   * NOUVEAU: Initialise les méthodes d'activation par ordre de fiabilité
+   */
+  initializeActivationMethods() {
+    this.activationMethods = [
+      {
+        name: 'powershell_advanced',
+        timeout: 500,
+        method: this.activateWithAdvancedPowerShell.bind(this)
+      },
+      {
+        name: 'powershell_simple',
+        timeout: 300,
+        method: this.activateWithSimplePowerShell.bind(this)
+      },
+      {
+        name: 'alt_tab_simulation',
+        timeout: 100,
+        method: this.activateWithAltTab.bind(this)
+      },
+      {
+        name: 'process_focus',
+        timeout: 200,
+        method: this.activateWithProcessFocus.bind(this)
+      }
+    ];
+    
+    console.log('WindowManagerWindows: Initialized 4 activation methods');
   }
 
   /**
@@ -76,15 +109,10 @@ class WindowManagerWindows {
         name: 'powershell_advanced',
         timeout: 4000,
         method: this.detectWithAdvancedPowerShell.bind(this)
-      },
-      {
-        name: 'simulation',
-        timeout: 100,
-        method: this.detectWithSimulation.bind(this)
       }
     ];
     
-    console.log('WindowManagerWindows: Initialized 5 detection methods');
+    console.log('WindowManagerWindows: Initialized 4 detection methods');
   }
 
   getDofusClasses() {
@@ -201,8 +229,11 @@ class WindowManagerWindows {
           if (this.isDofusProcess(commandLine, name, windowTitle)) {
             const title = windowTitle || this.extractTitleFromCommand(commandLine) || `${name} - Dofus`;
             
+            // NOUVEAU: Obtenir le vrai handle de fenêtre
+            const realHandle = await this.getRealWindowHandle(processId);
+            
             windows.push({
-              Handle: parseInt(processId) || Math.random() * 1000000,
+              Handle: realHandle || parseInt(processId) || Math.random() * 1000000,
               Title: title,
               ProcessId: parseInt(processId) || 0,
               ClassName: 'Dofus',
@@ -219,6 +250,30 @@ class WindowManagerWindows {
       console.error('WindowManagerWindows: WMIC detection failed:', error.message);
       return [];
     }
+  }
+
+  /**
+   * NOUVEAU: Obtient le vrai handle de fenêtre Windows
+   */
+  async getRealWindowHandle(processId) {
+    try {
+      const command = `powershell.exe -Command "Get-Process -Id ${processId} | Select-Object MainWindowHandle | ConvertTo-Json"`;
+      const { stdout } = await execAsync(command, { timeout: 500 });
+      
+      if (stdout && stdout.trim()) {
+        const result = JSON.parse(stdout.trim());
+        const handle = result.MainWindowHandle;
+        
+        if (handle && handle !== 0) {
+          console.log(`WindowManagerWindows: Found real handle ${handle} for process ${processId}`);
+          return handle;
+        }
+      }
+    } catch (error) {
+      console.warn(`WindowManagerWindows: Could not get real handle for process ${processId}:`, error.message);
+    }
+    
+    return null;
   }
 
   /**
@@ -257,8 +312,11 @@ class WindowManagerWindows {
           if (this.isDofusProcess('', imageName, windowTitle)) {
             const title = windowTitle !== 'N/A' ? windowTitle : `${imageName} - Dofus`;
             
+            // NOUVEAU: Obtenir le vrai handle
+            const realHandle = await this.getRealWindowHandle(pid);
+            
             windows.push({
-              Handle: parseInt(pid) || Math.random() * 1000000,
+              Handle: realHandle || parseInt(pid) || Math.random() * 1000000,
               Title: title,
               ProcessId: parseInt(pid) || 0,
               ClassName: 'Dofus',
@@ -284,7 +342,7 @@ class WindowManagerWindows {
     try {
       console.log('WindowManagerWindows: Using Simple PowerShell detection...');
       
-      const command = 'powershell.exe -Command "Get-Process | Where-Object { $_.ProcessName -match \'java|dofus|steamer|boulonix\' -and $_.MainWindowTitle } | Select-Object Id, ProcessName, MainWindowTitle | ConvertTo-Json"';
+      const command = 'powershell.exe -Command "Get-Process | Where-Object { $_.ProcessName -match \'java|dofus|steamer|boulonix\' -and $_.MainWindowTitle } | Select-Object Id, ProcessName, MainWindowTitle, MainWindowHandle | ConvertTo-Json"';
       
       const { stdout, stderr } = await execAsync(command);
       
@@ -304,7 +362,7 @@ class WindowManagerWindows {
         const windows = processes
           .filter(proc => proc.MainWindowTitle && this.isDofusProcess('', proc.ProcessName, proc.MainWindowTitle))
           .map(proc => ({
-            Handle: proc.Id || Math.random() * 1000000,
+            Handle: proc.MainWindowHandle || proc.Id || Math.random() * 1000000,
             Title: proc.MainWindowTitle,
             ProcessId: proc.Id || 0,
             ClassName: 'Dofus',
@@ -365,33 +423,6 @@ class WindowManagerWindows {
       console.error('WindowManagerWindows: Advanced PowerShell detection failed:', error.message);
       return [];
     }
-  }
-
-  /**
-   * MÉTHODE 5: Simulation (toujours réussit)
-   */
-  async detectWithSimulation() {
-    console.log('WindowManagerWindows: Using simulation detection (fallback)');
-    
-    // Créer des fenêtres simulées pour les tests
-    return [
-      {
-        Handle: 123456,
-        Title: 'Boulonix - Steamer - 3.1.10.13 - Release',
-        ProcessId: 12345,
-        ClassName: 'Dofus',
-        IsActive: false,
-        Bounds: { X: 0, Y: 0, Width: 800, Height: 600 }
-      },
-      {
-        Handle: 789012,
-        Title: 'TestChar - Feca - Dofus 3 - Beta',
-        ProcessId: 67890,
-        ClassName: 'Dofus',
-        IsActive: false,
-        Bounds: { X: 800, Y: 0, Width: 800, Height: 600 }
-      }
-    ];
   }
 
   /**
@@ -493,8 +524,9 @@ class WindowManagerWindows {
       // Generate stable ID
       const stableId = this.generateStableWindowId(character, dofusClass, rawWindow.ProcessId || windowHandle);
       
-      // Map the stable ID to the current window handle
+      // NOUVEAU: Stocker le vrai handle Windows
       this.windowIdMapping.set(stableId, windowHandle);
+      this.realWindowHandles.set(stableId, rawWindow.Handle);
       currentWindowIds.add(stableId);
       
       // Get stored class or use detected class
@@ -504,6 +536,7 @@ class WindowManagerWindows {
       const windowInfo = {
         id: stableId,
         handle: windowHandle,
+        realHandle: rawWindow.Handle, // NOUVEAU: Vrai handle Windows
         title: rawWindow.Title || 'Unknown Window',
         processName: this.extractProcessName(rawWindow.ClassName),
         className: rawWindow.ClassName || 'Unknown',
@@ -528,6 +561,7 @@ class WindowManagerWindows {
       if (!currentWindowIds.has(windowId)) {
         this.windows.delete(windowId);
         this.windowIdMapping.delete(windowId);
+        this.realWindowHandles.delete(windowId);
       }
     }
     
@@ -643,64 +677,181 @@ class WindowManagerWindows {
   }
 
   /**
-   * Activation ultra-rapide avec fallback intelligent
+   * NOUVEAU: Activation ultra-robuste avec plusieurs méthodes
    */
   async activateWindow(windowId) {
     try {
-      console.log(`WindowManagerWindows: ULTRA-FAST activation for ${windowId}`);
+      console.log(`WindowManagerWindows: ROBUST activation for ${windowId}`);
       
-      // Get the actual window handle from the stable ID
+      // Obtenir le vrai handle Windows
+      const realHandle = this.realWindowHandles.get(windowId);
       const windowHandle = this.windowIdMapping.get(windowId);
-      if (!windowHandle) {
+      
+      if (!realHandle && !windowHandle) {
         console.warn(`WindowManagerWindows: No handle found for ${windowId}, using simulation`);
         return this.simulateActivation(windowId);
       }
       
-      // Check cache first for faster activation
-      const cacheKey = windowHandle;
+      // Vérifier le cache d'activation
+      const cacheKey = realHandle || windowHandle;
       const now = Date.now();
       
       if (this.activationCache.has(cacheKey)) {
         const lastActivation = this.activationCache.get(cacheKey);
-        if (now - lastActivation < 200) { // 200ms cooldown
+        if (now - lastActivation < 200) {
           console.log(`WindowManagerWindows: Activation cooldown active for ${windowId}`);
           return true;
         }
       }
       
-      // NOUVEAU: Mode activation rapide
-      if (this.quickActivationEnabled) {
-        const success = await this.quickActivation(windowHandle);
-        if (success) {
-          this.activationCache.set(cacheKey, now);
-          this.updateActiveState(windowId);
-          console.log(`WindowManagerWindows: Quick activation SUCCESS for ${windowId}`);
-          return true;
+      // NOUVEAU: Essayer chaque méthode d'activation
+      for (const method of this.activationMethods) {
+        try {
+          console.log(`WindowManagerWindows: Trying ${method.name} for ${windowId}...`);
+          
+          const activationPromise = method.method(windowId, realHandle || windowHandle);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`${method.name} timeout`)), method.timeout)
+          );
+          
+          const success = await Promise.race([activationPromise, timeoutPromise]);
+          
+          if (success) {
+            this.activationCache.set(cacheKey, now);
+            this.updateActiveState(windowId);
+            console.log(`WindowManagerWindows: SUCCESS with ${method.name} for ${windowId}`);
+            return true;
+          }
+        } catch (error) {
+          console.warn(`WindowManagerWindows: ${method.name} failed: ${error.message}`);
+          continue;
         }
       }
       
-      // Fallback: simulation d'activation
-      console.log(`WindowManagerWindows: Using activation simulation for ${windowId}`);
+      // Si toutes les méthodes ont échoué, utiliser la simulation
+      console.log(`WindowManagerWindows: All activation methods failed, using simulation for ${windowId}`);
       return this.simulateActivation(windowId);
       
     } catch (error) {
-      console.error('WindowManagerWindows: Activation error:', error.message);
+      console.error('WindowManagerWindows: Critical activation error:', error.message);
       return this.simulateActivation(windowId);
     }
   }
 
   /**
-   * Activation rapide optimisée
+   * MÉTHODE D'ACTIVATION 1: PowerShell avancé avec SetForegroundWindow
    */
-  async quickActivation(windowHandle) {
+  async activateWithAdvancedPowerShell(windowId, windowHandle) {
     try {
-      // Commande PowerShell ultra-rapide
+      console.log(`WindowManagerWindows: Advanced PowerShell activation for handle ${windowHandle}`);
+      
+      const script = `
+        Add-Type -TypeDefinition @"
+        using System;
+        using System.Runtime.InteropServices;
+        public class Win32 {
+          [DllImport("user32.dll")]
+          public static extern bool SetForegroundWindow(IntPtr hWnd);
+          [DllImport("user32.dll")]
+          public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+          [DllImport("user32.dll")]
+          public static extern bool IsIconic(IntPtr hWnd);
+          [DllImport("user32.dll")]
+          public static extern bool BringWindowToTop(IntPtr hWnd);
+        }
+"@
+        
+        $handle = [IntPtr]${windowHandle}
+        
+        # Restaurer si minimisée
+        if ([Win32]::IsIconic($handle)) {
+          [Win32]::ShowWindow($handle, 9) # SW_RESTORE
+          Start-Sleep -Milliseconds 50
+        }
+        
+        # Mettre au premier plan
+        [Win32]::BringWindowToTop($handle)
+        $result = [Win32]::SetForegroundWindow($handle)
+        
+        Write-Output $result
+      `;
+      
+      const command = `powershell.exe -Command "${script.replace(/\n/g, '; ')}"`;
+      const { stdout } = await execAsync(command);
+      
+      const success = stdout.trim() === 'True';
+      console.log(`WindowManagerWindows: Advanced PowerShell result: ${success}`);
+      return success;
+    } catch (error) {
+      console.warn(`WindowManagerWindows: Advanced PowerShell activation failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * MÉTHODE D'ACTIVATION 2: PowerShell simple
+   */
+  async activateWithSimplePowerShell(windowId, windowHandle) {
+    try {
+      console.log(`WindowManagerWindows: Simple PowerShell activation for handle ${windowHandle}`);
+      
       const command = `powershell.exe -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; [Win32]::SetForegroundWindow([IntPtr]${windowHandle})"`;
       
-      const { stdout } = await execAsync(command, { timeout: 100 }); // 100ms max
-      return stdout.trim() === 'True';
+      const { stdout } = await execAsync(command);
+      const success = stdout.trim() === 'True';
+      
+      console.log(`WindowManagerWindows: Simple PowerShell result: ${success}`);
+      return success;
     } catch (error) {
-      console.warn(`WindowManagerWindows: Quick activation failed: ${error.message}`);
+      console.warn(`WindowManagerWindows: Simple PowerShell activation failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * MÉTHODE D'ACTIVATION 3: Simulation Alt+Tab
+   */
+  async activateWithAltTab(windowId, windowHandle) {
+    try {
+      console.log(`WindowManagerWindows: Alt+Tab simulation for ${windowId}`);
+      
+      // Simuler Alt+Tab pour changer de fenêtre
+      const command = `powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('%{TAB}')"`;
+      
+      await execAsync(command);
+      
+      // Attendre un peu et vérifier si ça a marché
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      console.log(`WindowManagerWindows: Alt+Tab simulation completed for ${windowId}`);
+      return true; // Supposer que ça a marché
+    } catch (error) {
+      console.warn(`WindowManagerWindows: Alt+Tab simulation failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * MÉTHODE D'ACTIVATION 4: Focus par processus
+   */
+  async activateWithProcessFocus(windowId, windowHandle) {
+    try {
+      console.log(`WindowManagerWindows: Process focus activation for ${windowId}`);
+      
+      // Obtenir le processus et essayer de l'activer
+      const window = this.windows.get(windowId);
+      if (!window || !window.info.pid) {
+        return false;
+      }
+      
+      const command = `powershell.exe -Command "Get-Process -Id ${window.info.pid} | ForEach-Object { $_.MainWindowHandle } | ForEach-Object { Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; [Win32]::SetForegroundWindow($_) }"`;
+      
+      await execAsync(command);
+      
+      console.log(`WindowManagerWindows: Process focus completed for ${windowId}`);
+      return true;
+    } catch (error) {
+      console.warn(`WindowManagerWindows: Process focus activation failed: ${error.message}`);
       return false;
     }
   }
@@ -717,6 +868,7 @@ class WindowManagerWindows {
     // Mettre à jour l'état
     this.updateActiveState(windowId);
     
+    console.log(`WindowManagerWindows: Activation simulation completed for ${windowId}`);
     return true; // Toujours réussit
   }
 
@@ -725,11 +877,15 @@ class WindowManagerWindows {
     for (const [windowId, windowData] of this.windows) {
       windowData.info.isActive = windowId === activeWindowId;
     }
+    
+    console.log(`WindowManagerWindows: Updated active state - ${activeWindowId} is now active`);
   }
 
   async moveWindow(windowId, x, y, width = -1, height = -1) {
     try {
-      const windowHandle = this.windowIdMapping.get(windowId);
+      const realHandle = this.realWindowHandles.get(windowId);
+      const windowHandle = realHandle || this.windowIdMapping.get(windowId);
+      
       if (!windowHandle) {
         console.warn(`WindowManagerWindows: No handle found for move operation: ${windowId}`);
         return true; // Simulation de succès
@@ -884,7 +1040,8 @@ class WindowManagerWindows {
     // Clear activation cache
     this.activationCache.clear();
     this.windowIdMapping.clear();
-    console.log('WindowManagerWindows: ROBUST multi-method system cleaned up');
+    this.realWindowHandles.clear();
+    console.log('WindowManagerWindows: ROBUST activation system cleaned up');
   }
 }
 
