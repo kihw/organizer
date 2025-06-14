@@ -24,6 +24,7 @@ class DofusOrganizer {
     this.isConfiguring = false;
     this.dofusWindows = [];
     this.windowMonitorInterval = null;
+    this.shortcutsEnabled = true;
     
     console.log('DofusOrganizer: Initializing application...');
     this.initializeApp();
@@ -83,6 +84,17 @@ class DofusOrganizer {
       {
         label: lang.main_refreshsort,
         click: () => this.refreshAndSort()
+      },
+      { type: 'separator' },
+      {
+        label: 'Next Window',
+        accelerator: 'Ctrl+Tab',
+        click: () => this.activateNextWindow()
+      },
+      {
+        label: this.shortcutsEnabled ? 'Disable Shortcuts' : 'Enable Shortcuts',
+        accelerator: 'Ctrl+Shift+D',
+        click: () => this.toggleShortcuts()
       },
       { type: 'separator' },
       {
@@ -265,8 +277,72 @@ class DofusOrganizer {
     this.updateTrayMenu();
   }
 
+  // New method: Activate next window
+  activateNextWindow() {
+    const enabledWindows = this.dofusWindows.filter(w => w.enabled);
+    if (enabledWindows.length === 0) return;
+
+    // Sort by initiative (descending), then by character name
+    enabledWindows.sort((a, b) => {
+      if (b.initiative !== a.initiative) {
+        return b.initiative - a.initiative;
+      }
+      return a.character.localeCompare(b.character);
+    });
+
+    // Find current active window
+    const currentActiveIndex = enabledWindows.findIndex(w => w.isActive);
+    
+    // Get next window (cycle to first if at end)
+    const nextIndex = currentActiveIndex < enabledWindows.length - 1 ? currentActiveIndex + 1 : 0;
+    const nextWindow = enabledWindows[nextIndex];
+    
+    if (nextWindow) {
+      console.log(`DofusOrganizer: Activating next window: ${nextWindow.character}`);
+      this.windowManager.activateWindow(nextWindow.id);
+    }
+  }
+
+  // New method: Toggle shortcuts on/off
+  toggleShortcuts() {
+    this.shortcutsEnabled = !this.shortcutsEnabled;
+    this.store.set('shortcutsEnabled', this.shortcutsEnabled);
+    
+    if (this.shortcutsEnabled && !this.isConfiguring) {
+      this.activateShortcuts();
+      console.log('DofusOrganizer: Shortcuts enabled');
+    } else {
+      this.deactivateShortcuts();
+      console.log('DofusOrganizer: Shortcuts disabled');
+    }
+    
+    this.updateTrayMenu();
+    
+    // Notify user
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('shortcuts-toggled', this.shortcutsEnabled);
+    }
+  }
+
   setupEventHandlers() {
     console.log('DofusOrganizer: Setting up IPC event handlers...');
+    
+    // Register global shortcuts for next window and toggle shortcuts
+    try {
+      globalShortcut.register('CommandOrControl+Tab', () => {
+        if (this.shortcutsEnabled) {
+          this.activateNextWindow();
+        }
+      });
+      
+      globalShortcut.register('CommandOrControl+Shift+D', () => {
+        this.toggleShortcuts();
+      });
+      
+      console.log('DofusOrganizer: Global shortcuts registered');
+    } catch (error) {
+      console.error('DofusOrganizer: Error registering global shortcuts:', error);
+    }
     
     // IPC handlers for renderer processes
     ipcMain.handle('get-dofus-windows', () => {
@@ -376,6 +452,22 @@ class DofusOrganizer {
       console.log('IPC: close-app called');
       this.quit();
     });
+
+    // New IPC handlers for global shortcuts
+    ipcMain.handle('activate-next-window', () => {
+      console.log('IPC: activate-next-window called');
+      this.activateNextWindow();
+    });
+
+    ipcMain.handle('toggle-shortcuts', () => {
+      console.log('IPC: toggle-shortcuts called');
+      this.toggleShortcuts();
+      return this.shortcutsEnabled;
+    });
+
+    ipcMain.handle('get-shortcuts-enabled', () => {
+      return this.shortcutsEnabled;
+    });
   }
 
   loadSettings() {
@@ -384,6 +476,10 @@ class DofusOrganizer {
     const language = this.store.get('language', 'FR');
     console.log(`DofusOrganizer: Setting language to ${language}`);
     this.languageManager.setLanguage(language);
+    
+    // Load shortcuts enabled state
+    this.shortcutsEnabled = this.store.get('shortcutsEnabled', true);
+    console.log(`DofusOrganizer: Shortcuts enabled: ${this.shortcutsEnabled}`);
     
     // Load and register shortcuts
     const shortcuts = this.store.get('shortcuts', {});
@@ -475,6 +571,8 @@ class DofusOrganizer {
       tooltip += ` (${enabledCount} enabled)`;
     }
     
+    tooltip += `\nShortcuts: ${this.shortcutsEnabled ? 'Enabled' : 'Disabled'}`;
+    
     console.log(`DofusOrganizer: Updating tray tooltip: ${tooltip}`);
     this.tray.setToolTip(tooltip);
   }
@@ -495,8 +593,10 @@ class DofusOrganizer {
   }
 
   activateShortcuts() {
-    console.log('DofusOrganizer: Activating shortcuts');
-    this.shortcutManager.activateAll();
+    if (this.shortcutsEnabled) {
+      console.log('DofusOrganizer: Activating shortcuts');
+      this.shortcutManager.activateAll();
+    }
   }
 
   deactivateShortcuts() {
@@ -510,6 +610,13 @@ class DofusOrganizer {
       clearInterval(this.windowMonitorInterval);
     }
     this.shortcutManager.cleanup();
+    
+    // Unregister global shortcuts
+    try {
+      globalShortcut.unregisterAll();
+    } catch (error) {
+      console.error('DofusOrganizer: Error unregistering global shortcuts:', error);
+    }
     
     // Clean up Windows-specific resources
     if (this.windowManager && typeof this.windowManager.cleanup === 'function') {

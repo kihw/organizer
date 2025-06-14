@@ -73,13 +73,14 @@ class WindowManagerWindows {
   }
 
   async initializePowerShell() {
-    // Create a corrected PowerShell script for advanced window operations
+    // Create an improved PowerShell script for window operations
     const script = `
-# Dofus Organizer Windows Management Script
+# Dofus Organizer Windows Management Script - Enhanced Version
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Diagnostics;
 
 public class WindowsAPI {
     [DllImport("user32.dll")]
@@ -115,6 +116,21 @@ public class WindowsAPI {
     [DllImport("user32.dll")]
     public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
     
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
+    
+    [DllImport("user32.dll")]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+    
+    [DllImport("user32.dll")]
+    public static extern bool SetActiveWindow(IntPtr hWnd);
+    
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+    
+    [DllImport("user32.dll")]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     
     public struct RECT {
@@ -126,6 +142,7 @@ public class WindowsAPI {
     
     public const int SW_RESTORE = 9;
     public const int SW_SHOW = 5;
+    public const int SW_MAXIMIZE = 3;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
     
@@ -137,6 +154,19 @@ public class WindowsAPI {
 
 function Get-DofusWindows {
     $windows = @()
+    $dofusProcesses = @()
+    
+    # First, get all Dofus-related processes
+    try {
+        $dofusProcesses = Get-Process | Where-Object { 
+            $_.ProcessName -match "Dofus|dofus|java" -and 
+            $_.MainWindowTitle -and 
+            $_.MainWindowTitle -notmatch "Organizer|Configuration"
+        }
+    } catch {
+        Write-Warning "Failed to get processes: $_"
+    }
+    
     $callback = {
         param($hwnd, $lparam)
         
@@ -155,44 +185,36 @@ function Get-DofusWindows {
                     $processId = 0
                     [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$processId)
                     
-                    $rect = New-Object WindowsAPI+RECT
-                    [WindowsAPI]::GetWindowRect($hwnd, [ref]$rect)
+                    # Check if this window belongs to a Dofus process
+                    $isDofusProcess = $script:dofusProcesses | Where-Object { $_.Id -eq $processId }
                     
-                    $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
-                    $isActive = $hwnd -eq $foregroundWindow
-                    
-                    # Check if this is a Dofus window - simplified detection
-                    $isDofus = $false
-                    
-                    # Look for Dofus-related keywords in title or class name
-                    $titleLower = $title.ToLower()
-                    $classLower = $className.ToLower()
-                    
-                    # Exclude our own organizer windows
-                    if ($title -match "Organizer|Configuration") {
-                        $isDofus = $false
-                    }
-                    # Check for Dofus patterns
-                    elseif ($titleLower -match "dofus|steamer|boulonix|ankama" -or 
-                           $classLower -match "dofus|unity|java") {
-                        $isDofus = $true
-                    }
-                    
-                    if ($isDofus) {
-                        $window = @{
-                            Handle = $hwnd.ToInt64()
-                            Title = $title
-                            ClassName = $className
-                            ProcessId = $processId
-                            IsActive = $isActive
-                            Bounds = @{
-                                X = $rect.Left
-                                Y = $rect.Top
-                                Width = $rect.Right - $rect.Left
-                                Height = $rect.Bottom - $rect.Top
+                    if ($isDofusProcess) {
+                        $rect = New-Object WindowsAPI+RECT
+                        [WindowsAPI]::GetWindowRect($hwnd, [ref]$rect)
+                        
+                        $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
+                        $isActive = $hwnd -eq $foregroundWindow
+                        
+                        # Additional validation - check title contains expected patterns
+                        $titleLower = $title.ToLower()
+                        if ($titleLower -match "dofus|steamer|boulonix" -and 
+                            $titleLower -notmatch "organizer|configuration") {
+                            
+                            $window = @{
+                                Handle = $hwnd.ToInt64()
+                                Title = $title
+                                ClassName = $className
+                                ProcessId = $processId
+                                IsActive = $isActive
+                                Bounds = @{
+                                    X = $rect.Left
+                                    Y = $rect.Top
+                                    Width = $rect.Right - $rect.Left
+                                    Height = $rect.Bottom - $rect.Top
+                                }
                             }
+                            $script:windows += $window
                         }
-                        $script:windows += $window
                     }
                 }
             }
@@ -204,6 +226,7 @@ function Get-DofusWindows {
     
     try {
         $script:windows = @()
+        $script:dofusProcesses = $dofusProcesses
         [WindowsAPI]::EnumWindows($callback, [IntPtr]::Zero)
         return $script:windows
     } catch {
@@ -217,17 +240,41 @@ function Activate-Window {
     
     $hwnd = [IntPtr]$Handle
     try {
-        # First, restore the window if minimized
-        [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
-        Start-Sleep -Milliseconds 100
+        # Enhanced window activation process
+        $currentThread = [WindowsAPI]::GetCurrentThreadId()
+        $windowThread = 0
+        [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$windowThread)
         
-        # Then bring it to foreground
+        # Attach to the window's thread
+        if ($windowThread -ne $currentThread) {
+            [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $true)
+        }
+        
+        # Restore if minimized
+        if ([WindowsAPI]::IsIconic($hwnd)) {
+            [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
+            Start-Sleep -Milliseconds 150
+        }
+        
+        # Bring to top and set as foreground
+        [WindowsAPI]::BringWindowToTop($hwnd)
+        Start-Sleep -Milliseconds 50
+        
         [WindowsAPI]::SetForegroundWindow($hwnd)
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds 50
+        
+        [WindowsAPI]::SetActiveWindow($hwnd)
+        Start-Sleep -Milliseconds 50
         
         # Ensure it's on top
         [WindowsAPI]::SetWindowPos($hwnd, [WindowsAPI]::HWND_TOP, 0, 0, 0, 0, 
                                   [WindowsAPI]::SWP_NOMOVE -bor [WindowsAPI]::SWP_NOSIZE)
+        
+        # Detach from thread
+        if ($windowThread -ne $currentThread) {
+            [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $false)
+        }
+        
         return $true
     } catch {
         Write-Error "Failed to activate window: $_"

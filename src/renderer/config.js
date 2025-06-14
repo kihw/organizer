@@ -12,6 +12,7 @@ class ConfigRenderer {
         this.currentClassWindowId = null;
         this.currentShortcut = '';
         this.currentKeyHandler = null;
+        this.shortcutsEnabled = true;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -25,13 +26,16 @@ class ConfigRenderer {
             windowsList: document.getElementById('windows-list'),
             noWindows: document.getElementById('no-windows'),
             refreshBtn: document.getElementById('refresh-btn'),
-            closeBtn: document.getElementById('close-btn'),
-            gameTypeBtn: document.getElementById('game-type-btn'),
             languageBtn: document.getElementById('language-btn'),
             organizeBtn: document.getElementById('organize-btn'),
+            nextWindowBtn: document.getElementById('next-window-btn'),
+            toggleShortcutsBtn: document.getElementById('toggle-shortcuts-btn'),
+            toggleShortcutsText: document.getElementById('toggle-shortcuts-text'),
             dockEnabled: document.getElementById('dock-enabled'),
             dockPosition: document.getElementById('dock-position'),
-            windowCount: document.getElementById('window-count')
+            windowCount: document.getElementById('window-count'),
+            shortcutsStatus: document.getElementById('shortcuts-status'),
+            shortcutsStatusText: document.getElementById('shortcuts-status-text')
         };
         
         console.log('Config.js: Elements found:', Object.keys(this.elements).filter(k => this.elements[k]));
@@ -52,24 +56,18 @@ class ConfigRenderer {
             this.updateLanguage();
         });
 
+        ipcRenderer.on('shortcuts-toggled', (event, enabled) => {
+            console.log('Config.js: Received shortcuts-toggled:', enabled);
+            this.shortcutsEnabled = enabled;
+            this.updateShortcutsUI();
+            this.showShortcutsStatus();
+        });
+
         // Button listeners
         if (this.elements.refreshBtn) {
             this.elements.refreshBtn.addEventListener('click', () => {
                 console.log('Config.js: Refresh button clicked');
                 this.refreshWindows();
-            });
-        }
-
-        if (this.elements.closeBtn) {
-            this.elements.closeBtn.addEventListener('click', () => {
-                console.log('Config.js: Close button clicked');
-                window.close();
-            });
-        }
-
-        if (this.elements.gameTypeBtn) {
-            this.elements.gameTypeBtn.addEventListener('click', () => {
-                this.showGameTypeModal();
             });
         }
 
@@ -82,6 +80,18 @@ class ConfigRenderer {
         if (this.elements.organizeBtn) {
             this.elements.organizeBtn.addEventListener('click', () => {
                 this.showOrganizeModal();
+            });
+        }
+
+        if (this.elements.nextWindowBtn) {
+            this.elements.nextWindowBtn.addEventListener('click', () => {
+                this.activateNextWindow();
+            });
+        }
+
+        if (this.elements.toggleShortcutsBtn) {
+            this.elements.toggleShortcutsBtn.addEventListener('click', () => {
+                this.toggleShortcuts();
             });
         }
 
@@ -103,22 +113,6 @@ class ConfigRenderer {
     }
 
     setupModalEventListeners() {
-        // Game type modal
-        const gameTypeSave = document.getElementById('game-type-save');
-        const gameTypeCancel = document.getElementById('game-type-cancel');
-        
-        if (gameTypeSave) {
-            gameTypeSave.addEventListener('click', () => {
-                this.saveGameType();
-            });
-        }
-        
-        if (gameTypeCancel) {
-            gameTypeCancel.addEventListener('click', () => {
-                this.hideGameTypeModal();
-            });
-        }
-
         // Language modal
         const languageSave = document.getElementById('language-save');
         const languageCancel = document.getElementById('language-cancel');
@@ -183,11 +177,16 @@ class ConfigRenderer {
             // Get Dofus classes
             this.dofusClasses = await ipcRenderer.invoke('get-dofus-classes');
             console.log('Config.js: Loaded Dofus classes:', Object.keys(this.dofusClasses));
+
+            // Get shortcuts enabled state
+            this.shortcutsEnabled = await ipcRenderer.invoke('get-shortcuts-enabled');
+            console.log('Config.js: Shortcuts enabled:', this.shortcutsEnabled);
             
             this.renderWindows();
             this.updateLanguage();
             this.loadDockSettings();
             this.updateWindowCount();
+            this.updateShortcutsUI();
             
         } catch (error) {
             console.error('Config.js: Error loading data:', error);
@@ -302,6 +301,28 @@ class ConfigRenderer {
         }
     }
 
+    updateShortcutsUI() {
+        if (this.elements.toggleShortcutsText) {
+            this.elements.toggleShortcutsText.textContent = this.shortcutsEnabled ? 'Disable Shortcuts' : 'Enable Shortcuts';
+        }
+        
+        if (this.elements.toggleShortcutsBtn) {
+            this.elements.toggleShortcutsBtn.className = this.shortcutsEnabled ? 'btn btn-secondary' : 'btn btn-primary';
+        }
+    }
+
+    showShortcutsStatus() {
+        if (this.elements.shortcutsStatus && this.elements.shortcutsStatusText) {
+            this.elements.shortcutsStatusText.textContent = `Shortcuts: ${this.shortcutsEnabled ? 'Enabled' : 'Disabled'}`;
+            this.elements.shortcutsStatus.className = `shortcuts-status show ${this.shortcutsEnabled ? 'enabled' : 'disabled'}`;
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                this.elements.shortcutsStatus.classList.remove('show');
+            }, 3000);
+        }
+    }
+
     updateLanguage() {
         // Basic language update - extend as needed
         if (this.language.displayGUI_nowindow) {
@@ -370,6 +391,26 @@ class ConfigRenderer {
         }
     }
 
+    async activateNextWindow() {
+        try {
+            console.log('Config.js: Activating next window');
+            await ipcRenderer.invoke('activate-next-window');
+        } catch (error) {
+            console.error('Config.js: Error activating next window:', error);
+        }
+    }
+
+    async toggleShortcuts() {
+        try {
+            console.log('Config.js: Toggling shortcuts');
+            this.shortcutsEnabled = await ipcRenderer.invoke('toggle-shortcuts');
+            this.updateShortcutsUI();
+            this.showShortcutsStatus();
+        } catch (error) {
+            console.error('Config.js: Error toggling shortcuts:', error);
+        }
+    }
+
     async updateInitiative(windowId, initiative) {
         try {
             console.log(`Config.js: Updating initiative for ${windowId}: ${initiative}`);
@@ -393,47 +434,6 @@ class ConfigRenderer {
             }
         } catch (error) {
             console.error('Config.js: Error toggling window:', error);
-        }
-    }
-
-    // Game Type Modal
-    showGameTypeModal() {
-        const modal = document.getElementById('game-type-modal');
-        if (modal) {
-            // Set current game type
-            const currentGameType = this.settings.globalGameType || 'dofus3';
-            const radioButton = modal.querySelector(`input[name="gameType"][value="${currentGameType}"]`);
-            if (radioButton) {
-                radioButton.checked = true;
-            }
-            
-            modal.style.display = 'flex';
-        }
-    }
-
-    hideGameTypeModal() {
-        const modal = document.getElementById('game-type-modal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-    }
-
-    async saveGameType() {
-        const modal = document.getElementById('game-type-modal');
-        const selectedRadio = modal.querySelector('input[name="gameType"]:checked');
-        
-        if (selectedRadio) {
-            try {
-                await ipcRenderer.invoke('set-game-type', selectedRadio.value);
-                this.hideGameTypeModal();
-                
-                // Refresh windows after changing game type
-                setTimeout(() => {
-                    this.refreshWindows();
-                }, 500);
-            } catch (error) {
-                console.error('Config.js: Error saving game type:', error);
-            }
         }
     }
 
