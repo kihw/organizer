@@ -39,6 +39,7 @@ body {
 .header-controls {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .btn {
@@ -94,6 +95,22 @@ body {
 }
 
 .btn-close:hover {
+    background: #c0392b;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 12px;
+    min-width: 24px;
+    height: 24px;
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-danger:hover {
     background: #c0392b;
 }
 
@@ -490,6 +507,42 @@ body {
     background: #f8f9fa;
 }
 
+/* Global Shortcuts Modal */
+.global-shortcut-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    margin: 12px 0;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #ecf0f1;
+}
+
+.global-shortcut-label {
+    flex: 1;
+    text-align: left;
+}
+
+.global-shortcut-label h4 {
+    margin: 0 0 4px 0;
+    color: #2c3e50;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.global-shortcut-label p {
+    margin: 0;
+    color: #7f8c8d;
+    font-size: 14px;
+}
+
+.global-shortcut-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* Shortcut Modal Styles */
 .shortcut-display-modal {
     background: linear-gradient(135deg, #3498db, #2980b9);
@@ -533,77 +586,6 @@ body {
     font-family: monospace;
     color: #2c3e50;
     margin: 0 4px;
-}
-
-/* Game Type Modal Styles */
-.game-type-options {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin: 20px 0;
-}
-
-.game-type-option {
-    display: flex;
-    align-items: center;
-    padding: 16px;
-    border: 2px solid #ecf0f1;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    background: white;
-}
-
-.game-type-option:hover {
-    border-color: #3498db;
-    background: #f8f9fa;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
-}
-
-.game-type-option input[type="radio"] {
-    display: none;
-}
-
-.game-type-option input[type="radio"]:checked + .option-content {
-    color: #3498db;
-}
-
-.game-type-option input[type="radio"]:checked + .option-content .option-icon {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-}
-
-.option-content {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    width: 100%;
-}
-
-.option-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    background: #ecf0f1;
-    transition: all 0.3s ease;
-}
-
-.option-text h4 {
-    margin: 0 0 4px 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-.option-text p {
-    margin: 0;
-    font-size: 14px;
-    color: #7f8c8d;
 }
 
 /* Language Modal Styles */
@@ -875,11 +857,6 @@ body {
     .header-controls {
         flex-direction: column;
         gap: 8px;
-    }
-    
-    .dock-settings {
-        flex-direction: column;
-        align-items: flex-start;
     }
     
     .footer-content {

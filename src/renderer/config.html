@@ -110,10 +110,13 @@
                     <img src="../../assets/icons/organize.png" alt="Organize" onerror="this.style.display='none'">
                     <span>Organize</span>
                 </button>
-                <button id="next-window-btn" class="btn btn-secondary" title="Next Window (Ctrl+Tab)">
+                <button id="global-shortcuts-btn" class="btn btn-secondary" title="Configure Global Shortcuts">
+                    <span>Global Shortcuts</span>
+                </button>
+                <button id="next-window-btn" class="btn btn-secondary" title="Next Window">
                     <span>Next Window</span>
                 </button>
-                <button id="toggle-shortcuts-btn" class="btn btn-secondary" title="Toggle Shortcuts (Ctrl+Shift+D)">
+                <button id="toggle-shortcuts-btn" class="btn btn-secondary" title="Toggle Shortcuts">
                     <span id="toggle-shortcuts-text">Disable Shortcuts</span>
                 </button>
             </div>
@@ -186,6 +189,48 @@
                 <button id="shortcut-save" class="btn btn-primary">Save Shortcut</button>
                 <button id="shortcut-cancel" class="btn btn-secondary">Cancel</button>
                 <button id="shortcut-remove" class="btn btn-danger">Remove Shortcut</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Shortcuts Modal -->
+    <div id="global-shortcuts-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Configure Global Shortcuts</h3>
+                <button class="modal-close" onclick="configRenderer.closeGlobalShortcutsModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p>Configure global shortcuts that work system-wide:</p>
+                
+                <div class="global-shortcut-item">
+                    <div class="global-shortcut-label">
+                        <h4>Next Window</h4>
+                        <p>Cycle to the next Dofus window (by initiative order)</p>
+                    </div>
+                    <div class="global-shortcut-controls">
+                        <div id="next-window-shortcut-display" class="shortcut-display" onclick="configRenderer.setGlobalShortcut('nextWindow')">
+                            Ctrl+Tab
+                        </div>
+                        <button class="btn btn-danger btn-small" onclick="configRenderer.removeGlobalShortcut('nextWindow')" title="Remove shortcut">×</button>
+                    </div>
+                </div>
+                
+                <div class="global-shortcut-item">
+                    <div class="global-shortcut-label">
+                        <h4>Toggle Shortcuts</h4>
+                        <p>Enable or disable all shortcuts</p>
+                    </div>
+                    <div class="global-shortcut-controls">
+                        <div id="toggle-shortcuts-shortcut-display" class="shortcut-display" onclick="configRenderer.setGlobalShortcut('toggleShortcuts')">
+                            Ctrl+Shift+D
+                        </div>
+                        <button class="btn btn-danger btn-small" onclick="configRenderer.removeGlobalShortcut('toggleShortcuts')" title="Remove shortcut">×</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="configRenderer.closeGlobalShortcutsModal()">Close</button>
             </div>
         </div>
     </div>

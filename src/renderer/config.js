@@ -13,6 +13,8 @@ class ConfigRenderer {
         this.currentShortcut = '';
         this.currentKeyHandler = null;
         this.shortcutsEnabled = true;
+        this.globalShortcuts = {};
+        this.currentGlobalShortcutType = null;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -28,6 +30,7 @@ class ConfigRenderer {
             refreshBtn: document.getElementById('refresh-btn'),
             languageBtn: document.getElementById('language-btn'),
             organizeBtn: document.getElementById('organize-btn'),
+            globalShortcutsBtn: document.getElementById('global-shortcuts-btn'),
             nextWindowBtn: document.getElementById('next-window-btn'),
             toggleShortcutsBtn: document.getElementById('toggle-shortcuts-btn'),
             toggleShortcutsText: document.getElementById('toggle-shortcuts-text'),
@@ -80,6 +83,12 @@ class ConfigRenderer {
         if (this.elements.organizeBtn) {
             this.elements.organizeBtn.addEventListener('click', () => {
                 this.showOrganizeModal();
+            });
+        }
+
+        if (this.elements.globalShortcutsBtn) {
+            this.elements.globalShortcutsBtn.addEventListener('click', () => {
+                this.showGlobalShortcutsModal();
             });
         }
 
@@ -181,12 +190,17 @@ class ConfigRenderer {
             // Get shortcuts enabled state
             this.shortcutsEnabled = await ipcRenderer.invoke('get-shortcuts-enabled');
             console.log('Config.js: Shortcuts enabled:', this.shortcutsEnabled);
+
+            // Get global shortcuts
+            this.globalShortcuts = await ipcRenderer.invoke('get-global-shortcuts');
+            console.log('Config.js: Global shortcuts:', this.globalShortcuts);
             
             this.renderWindows();
             this.updateLanguage();
             this.loadDockSettings();
             this.updateWindowCount();
             this.updateShortcutsUI();
+            this.updateGlobalShortcutsDisplay();
             
         } catch (error) {
             console.error('Config.js: Error loading data:', error);
@@ -308,6 +322,19 @@ class ConfigRenderer {
         
         if (this.elements.toggleShortcutsBtn) {
             this.elements.toggleShortcutsBtn.className = this.shortcutsEnabled ? 'btn btn-secondary' : 'btn btn-primary';
+        }
+    }
+
+    updateGlobalShortcutsDisplay() {
+        const nextWindowDisplay = document.getElementById('next-window-shortcut-display');
+        const toggleShortcutsDisplay = document.getElementById('toggle-shortcuts-shortcut-display');
+        
+        if (nextWindowDisplay && this.globalShortcuts.nextWindow) {
+            nextWindowDisplay.textContent = this.globalShortcuts.nextWindow;
+        }
+        
+        if (toggleShortcutsDisplay && this.globalShortcuts.toggleShortcuts) {
+            toggleShortcutsDisplay.textContent = this.globalShortcuts.toggleShortcuts;
         }
     }
 
@@ -437,6 +464,41 @@ class ConfigRenderer {
         }
     }
 
+    // Global Shortcuts Modal
+    showGlobalShortcutsModal() {
+        const modal = document.getElementById('global-shortcuts-modal');
+        if (modal) {
+            this.updateGlobalShortcutsDisplay();
+            modal.style.display = 'flex';
+        }
+    }
+
+    closeGlobalShortcutsModal() {
+        const modal = document.getElementById('global-shortcuts-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    setGlobalShortcut(type) {
+        console.log(`Config.js: Setting global shortcut for ${type}`);
+        this.currentGlobalShortcutType = type;
+        this.showShortcutModal(null, true);
+    }
+
+    async removeGlobalShortcut(type) {
+        try {
+            console.log(`Config.js: Removing global shortcut for ${type}`);
+            await ipcRenderer.invoke('remove-global-shortcut', type);
+            
+            // Update local data
+            this.globalShortcuts[type] = '';
+            this.updateGlobalShortcutsDisplay();
+        } catch (error) {
+            console.error('Config.js: Error removing global shortcut:', error);
+        }
+    }
+
     // Language Modal
     showLanguageModal() {
         const modal = document.getElementById('language-modal');
@@ -500,18 +562,28 @@ class ConfigRenderer {
     // Shortcut Modal
     setShortcut(windowId) {
         console.log(`Config.js: Setting shortcut for ${windowId}`);
-        this.showShortcutModal(windowId);
+        this.showShortcutModal(windowId, false);
     }
 
-    showShortcutModal(windowId) {
+    showShortcutModal(windowId, isGlobal = false) {
         const modal = document.getElementById('shortcut-modal');
         const display = document.getElementById('shortcut-display');
-        const window = this.windows.find(w => w.id === windowId);
+        const title = document.getElementById('shortcut-title');
         
-        if (modal && display) {
-            this.currentShortcutWindowId = windowId;
+        if (modal && display && title) {
+            if (isGlobal) {
+                this.currentShortcutWindowId = null;
+                title.textContent = `Set Global Shortcut - ${this.currentGlobalShortcutType === 'nextWindow' ? 'Next Window' : 'Toggle Shortcuts'}`;
+                display.textContent = this.globalShortcuts[this.currentGlobalShortcutType] || 'Press any key or combination...';
+            } else {
+                this.currentShortcutWindowId = windowId;
+                this.currentGlobalShortcutType = null;
+                title.textContent = 'Set Keyboard Shortcut';
+                const window = this.windows.find(w => w.id === windowId);
+                display.textContent = window?.shortcut || 'Press any key or combination...';
+            }
+            
             this.currentShortcut = '';
-            display.textContent = window?.shortcut || 'Press any key or combination...';
             display.classList.add('recording');
             modal.style.display = 'flex';
             
@@ -622,23 +694,41 @@ class ConfigRenderer {
     }
 
     async saveShortcut() {
-        if (this.currentShortcutWindowId && this.currentShortcut) {
+        if (this.currentShortcut) {
             try {
-                console.log(`Config.js: Saving shortcut ${this.currentShortcut} for window ${this.currentShortcutWindowId}`);
-                
-                const success = await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindowId, this.currentShortcut);
-                
-                if (success) {
-                    // Update local data
-                    const window = this.windows.find(w => w.id === this.currentShortcutWindowId);
-                    if (window) {
-                        window.shortcut = this.currentShortcut;
-                        this.renderWindows();
+                if (this.currentGlobalShortcutType) {
+                    // Save global shortcut
+                    console.log(`Config.js: Saving global shortcut ${this.currentShortcut} for ${this.currentGlobalShortcutType}`);
+                    
+                    const success = await ipcRenderer.invoke('set-global-shortcut', this.currentGlobalShortcutType, this.currentShortcut);
+                    
+                    if (success) {
+                        // Update local data
+                        this.globalShortcuts[this.currentGlobalShortcutType] = this.currentShortcut;
+                        this.updateGlobalShortcutsDisplay();
+                        console.log('Config.js: Global shortcut saved successfully');
+                    } else {
+                        console.error('Config.js: Failed to save global shortcut - may be invalid or conflicting');
+                        alert('Failed to save shortcut. It may be invalid or already in use.');
                     }
-                    console.log('Config.js: Shortcut saved successfully');
-                } else {
-                    console.error('Config.js: Failed to save shortcut - may be invalid or conflicting');
-                    alert('Failed to save shortcut. It may be invalid or already in use.');
+                } else if (this.currentShortcutWindowId) {
+                    // Save window shortcut
+                    console.log(`Config.js: Saving shortcut ${this.currentShortcut} for window ${this.currentShortcutWindowId}`);
+                    
+                    const success = await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindowId, this.currentShortcut);
+                    
+                    if (success) {
+                        // Update local data
+                        const window = this.windows.find(w => w.id === this.currentShortcutWindowId);
+                        if (window) {
+                            window.shortcut = this.currentShortcut;
+                            this.renderWindows();
+                        }
+                        console.log('Config.js: Shortcut saved successfully');
+                    } else {
+                        console.error('Config.js: Failed to save shortcut - may be invalid or conflicting');
+                        alert('Failed to save shortcut. It may be invalid or already in use.');
+                    }
                 }
             } catch (error) {
                 console.error('Config.js: Error saving shortcut:', error);
@@ -653,7 +743,11 @@ class ConfigRenderer {
     }
 
     async removeShortcut() {
-        if (this.currentShortcutWindowId) {
+        if (this.currentGlobalShortcutType) {
+            // Remove global shortcut
+            await this.removeGlobalShortcut(this.currentGlobalShortcutType);
+        } else if (this.currentShortcutWindowId) {
+            // Remove window shortcut
             try {
                 await ipcRenderer.invoke('remove-shortcut', this.currentShortcutWindowId);
                 
@@ -690,6 +784,7 @@ class ConfigRenderer {
         }
         
         this.currentShortcutWindowId = null;
+        this.currentGlobalShortcutType = null;
         this.currentShortcut = '';
     }
 

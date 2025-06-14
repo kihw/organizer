@@ -25,6 +25,10 @@ class DofusOrganizer {
     this.dofusWindows = [];
     this.windowMonitorInterval = null;
     this.shortcutsEnabled = true;
+    this.globalShortcuts = {
+      nextWindow: null,
+      toggleShortcuts: null
+    };
     
     console.log('DofusOrganizer: Initializing application...');
     this.initializeApp();
@@ -76,6 +80,9 @@ class DofusOrganizer {
     
     console.log('DofusOrganizer: Updating tray menu');
     
+    const nextWindowShortcut = this.store.get('globalShortcuts.nextWindow', 'Ctrl+Tab');
+    const toggleShortcutsShortcut = this.store.get('globalShortcuts.toggleShortcuts', 'Ctrl+Shift+D');
+    
     const contextMenu = Menu.buildFromTemplate([
       {
         label: lang.main_configure,
@@ -87,13 +94,11 @@ class DofusOrganizer {
       },
       { type: 'separator' },
       {
-        label: 'Next Window',
-        accelerator: 'Ctrl+Tab',
+        label: `Next Window (${nextWindowShortcut})`,
         click: () => this.activateNextWindow()
       },
       {
-        label: this.shortcutsEnabled ? 'Disable Shortcuts' : 'Enable Shortcuts',
-        accelerator: 'Ctrl+Shift+D',
+        label: `${this.shortcutsEnabled ? 'Disable' : 'Enable'} Shortcuts (${toggleShortcutsShortcut})`,
         click: () => this.toggleShortcuts()
       },
       { type: 'separator' },
@@ -324,25 +329,73 @@ class DofusOrganizer {
     }
   }
 
-  setupEventHandlers() {
-    console.log('DofusOrganizer: Setting up IPC event handlers...');
-    
-    // Register global shortcuts for next window and toggle shortcuts
+  // Register global shortcuts
+  registerGlobalShortcuts() {
     try {
-      globalShortcut.register('CommandOrControl+Tab', () => {
-        if (this.shortcutsEnabled) {
-          this.activateNextWindow();
+      // Unregister existing global shortcuts
+      this.unregisterGlobalShortcuts();
+      
+      const nextWindowShortcut = this.store.get('globalShortcuts.nextWindow');
+      const toggleShortcutsShortcut = this.store.get('globalShortcuts.toggleShortcuts');
+      
+      if (nextWindowShortcut) {
+        const accelerator = this.shortcutManager.convertShortcutToAccelerator(nextWindowShortcut);
+        if (accelerator) {
+          const success = globalShortcut.register(accelerator, () => {
+            if (this.shortcutsEnabled) {
+              this.activateNextWindow();
+            }
+          });
+          
+          if (success) {
+            this.globalShortcuts.nextWindow = accelerator;
+            console.log(`DofusOrganizer: Registered next window shortcut: ${accelerator}`);
+          } else {
+            console.warn(`DofusOrganizer: Failed to register next window shortcut: ${accelerator}`);
+          }
         }
-      });
+      }
       
-      globalShortcut.register('CommandOrControl+Shift+D', () => {
-        this.toggleShortcuts();
-      });
+      if (toggleShortcutsShortcut) {
+        const accelerator = this.shortcutManager.convertShortcutToAccelerator(toggleShortcutsShortcut);
+        if (accelerator) {
+          const success = globalShortcut.register(accelerator, () => {
+            this.toggleShortcuts();
+          });
+          
+          if (success) {
+            this.globalShortcuts.toggleShortcuts = accelerator;
+            console.log(`DofusOrganizer: Registered toggle shortcuts shortcut: ${accelerator}`);
+          } else {
+            console.warn(`DofusOrganizer: Failed to register toggle shortcuts shortcut: ${accelerator}`);
+          }
+        }
+      }
       
-      console.log('DofusOrganizer: Global shortcuts registered');
     } catch (error) {
       console.error('DofusOrganizer: Error registering global shortcuts:', error);
     }
+  }
+
+  // Unregister global shortcuts
+  unregisterGlobalShortcuts() {
+    try {
+      if (this.globalShortcuts.nextWindow) {
+        globalShortcut.unregister(this.globalShortcuts.nextWindow);
+        this.globalShortcuts.nextWindow = null;
+      }
+      
+      if (this.globalShortcuts.toggleShortcuts) {
+        globalShortcut.unregister(this.globalShortcuts.toggleShortcuts);
+        this.globalShortcuts.toggleShortcuts = null;
+      }
+    } catch (error) {
+      console.error('DofusOrganizer: Error unregistering global shortcuts:', error);
+    }
+  }
+
+  setupEventHandlers() {
+    console.log('DofusOrganizer: Setting up IPC event handlers...');
     
     // IPC handlers for renderer processes
     ipcMain.handle('get-dofus-windows', () => {
@@ -391,6 +444,14 @@ class DofusOrganizer {
         
         // Force refresh to update avatars
         setTimeout(() => this.refreshAndSort(), 100);
+      }
+      
+      // Handle global shortcut changes
+      const globalShortcutChanges = Object.keys(settings).filter(key => key.startsWith('globalShortcuts.'));
+      if (globalShortcutChanges.length > 0) {
+        console.log('DofusOrganizer: Global shortcuts changed, re-registering...');
+        setTimeout(() => this.registerGlobalShortcuts(), 100);
+        this.updateTrayMenu();
       }
       
       // Update dock if settings changed
@@ -468,6 +529,41 @@ class DofusOrganizer {
     ipcMain.handle('get-shortcuts-enabled', () => {
       return this.shortcutsEnabled;
     });
+
+    // Global shortcuts management
+    ipcMain.handle('get-global-shortcuts', () => {
+      console.log('IPC: get-global-shortcuts called');
+      return {
+        nextWindow: this.store.get('globalShortcuts.nextWindow', 'Ctrl+Tab'),
+        toggleShortcuts: this.store.get('globalShortcuts.toggleShortcuts', 'Ctrl+Shift+D')
+      };
+    });
+
+    ipcMain.handle('set-global-shortcut', (event, type, shortcut) => {
+      console.log(`IPC: set-global-shortcut called for ${type}: ${shortcut}`);
+      
+      // Validate shortcut
+      if (!this.shortcutManager.validateShortcut(shortcut)) {
+        console.warn(`IPC: Invalid or conflicting global shortcut: ${shortcut}`);
+        return false;
+      }
+      
+      // Save the shortcut
+      this.store.set(`globalShortcuts.${type}`, shortcut);
+      
+      // Re-register global shortcuts
+      this.registerGlobalShortcuts();
+      this.updateTrayMenu();
+      
+      return true;
+    });
+
+    ipcMain.handle('remove-global-shortcut', (event, type) => {
+      console.log(`IPC: remove-global-shortcut called for: ${type}`);
+      this.store.delete(`globalShortcuts.${type}`);
+      this.registerGlobalShortcuts();
+      this.updateTrayMenu();
+    });
   }
 
   loadSettings() {
@@ -489,6 +585,17 @@ class DofusOrganizer {
         this.windowManager.activateWindow(windowId);
       });
     });
+
+    // Set default global shortcuts if not set
+    if (!this.store.get('globalShortcuts.nextWindow')) {
+      this.store.set('globalShortcuts.nextWindow', 'Ctrl+Tab');
+    }
+    if (!this.store.get('globalShortcuts.toggleShortcuts')) {
+      this.store.set('globalShortcuts.toggleShortcuts', 'Ctrl+Shift+D');
+    }
+
+    // Register global shortcuts
+    this.registerGlobalShortcuts();
   }
 
   startWindowMonitoring() {
@@ -596,12 +703,14 @@ class DofusOrganizer {
     if (this.shortcutsEnabled) {
       console.log('DofusOrganizer: Activating shortcuts');
       this.shortcutManager.activateAll();
+      this.registerGlobalShortcuts();
     }
   }
 
   deactivateShortcuts() {
     console.log('DofusOrganizer: Deactivating shortcuts');
     this.shortcutManager.deactivateAll();
+    this.unregisterGlobalShortcuts();
   }
 
   cleanup() {
@@ -613,6 +722,7 @@ class DofusOrganizer {
     
     // Unregister global shortcuts
     try {
+      this.unregisterGlobalShortcuts();
       globalShortcut.unregisterAll();
     } catch (error) {
       console.error('DofusOrganizer: Error unregistering global shortcuts:', error);
