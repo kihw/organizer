@@ -46,6 +46,9 @@ npm run clean >nul 2>&1
 
 REM Build for Windows
 echo Building for Windows...
+echo This will create installers and portable versions for Windows...
+echo.
+
 npm run build-win
 if %errorlevel% neq 0 (
     echo Error: Build failed
@@ -60,9 +63,36 @@ echo ========================================
 echo.
 echo Output files are in the 'dist' folder:
 if exist "dist" (
-    dir "dist" /b
+    echo.
+    echo Available builds:
+    dir "dist" /b | findstr /i "\.exe \.zip \.msi"
+    echo.
+    echo Installation files:
+    dir "dist" /b | findstr /i "Setup"
+    echo.
+    echo Portable versions:
+    dir "dist" /b | findstr /i "portable"
 ) else (
     echo No output files found
+)
+
+echo.
+echo Build types created:
+echo - NSIS Installer (.exe) - Recommended for most users
+echo - Portable version (.exe) - No installation required
+echo - ZIP archive - Manual extraction
+echo.
+echo The installer includes:
+echo - Desktop shortcut creation
+echo - Start menu integration
+echo - Automatic updates support
+echo - Uninstaller
+echo.
+
+REM Ask if user wants to open the dist folder
+set /p choice="Do you want to open the dist folder? (y/N): "
+if /i "%choice%"=="y" (
+    explorer dist
 )
 
 echo.
