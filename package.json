@@ -1,7 +1,7 @@
 {
   "name": "dofus-organizer",
-  "version": "0.2.0-dev",
-  "description": "A modern cross-platform Dofus Window Organizer with keyboard shortcuts, window management, and navigation dock",
+  "version": "0.2.0",
+  "description": "A modern cross-platform Dofus Window Organizer with enhanced performance, advanced keyboard shortcuts, and optimized window management",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -16,6 +16,8 @@
     "postinstall": "electron-builder install-app-deps",
     "clean": "rimraf dist",
     "test": "jest",
+    "test:performance": "node tests/performance.js",
+    "benchmark": "node tests/benchmark.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix"
   },
@@ -26,7 +28,10 @@
     "gaming", 
     "multiboxing",
     "electron",
-    "cross-platform"
+    "cross-platform",
+    "performance",
+    "shortcuts",
+    "v2.0"
   ],
   "author": {
     "name": "Dofus Organizer Team",
@@ -58,7 +63,7 @@
   },
   "build": {
     "appId": "com.dofus.organizer",
-    "productName": "Dofus Organizer",
+    "productName": "Dofus Organizer v2.0",
     "copyright": "Copyright © 2024 Dofus Organizer Team",
     "directories": {
       "output": "dist",
@@ -120,9 +125,9 @@
       "category": "Game",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "desktop": {
-        "Name": "Dofus Organizer",
-        "Comment": "Window organizer for Dofus multi-accounting",
-        "Keywords": "dofus;window;organizer;gaming;",
+        "Name": "Dofus Organizer v2.0",
+        "Comment": "Enhanced window organizer for Dofus multi-accounting",
+        "Keywords": "dofus;window;organizer;gaming;performance;",
         "StartupWMClass": "dofus-organizer"
       }
     },
