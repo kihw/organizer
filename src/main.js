@@ -392,20 +392,13 @@ class DofusOrganizerV2 {
         console.log('DofusOrganizerV2: Enhanced config window ready to show');
         this.mainWindow.show();
         
-        // Force refresh avec monitoring
+        // CORRECTION: Envoyer immédiatement les données actuelles
         setTimeout(() => {
-          console.log('DofusOrganizerV2: Forcing enhanced window refresh for config...');
-          performanceMonitor.measureAsync('config_refresh', async () => {
-            await this.refreshAndSort();
-            
-            setTimeout(() => {
-              if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-                console.log(`DofusOrganizerV2: Force sending ${this.dofusWindows.length} windows to enhanced config renderer`);
-                this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
-              }
-            }, 500);
-          });
-        }, 1000);
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            console.log(`DofusOrganizerV2: Sending current ${this.dofusWindows.length} windows to config`);
+            this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
+          }
+        }, 500);
       });
 
       this.mainWindow.on('closed', () => {
@@ -669,11 +662,14 @@ class DofusOrganizerV2 {
   setupEventHandlers() {
     console.log('DofusOrganizerV2: Setting up enhanced IPC event handlers...');
     
-    // Gestionnaires IPC pour les processus de rendu
+    // CORRECTION CRITIQUE: Gestionnaire IPC pour get-dofus-windows
     ipcMain.handle('get-dofus-windows', async () => {
       return performanceMonitor.measureAsync('ipc_get_windows', async () => {
         console.log(`IPC: get-dofus-windows called, returning ${this.dofusWindows.length} windows`);
-        return this.dofusWindows;
+        console.log('IPC: Current windows data:', this.dofusWindows.map(w => ({ id: w.id, character: w.character, class: w.dofusClass })));
+        
+        // CORRECTION: Toujours retourner les données actuelles
+        return [...this.dofusWindows]; // Clone pour éviter les modifications
       });
     });
 
@@ -1029,8 +1025,9 @@ class DofusOrganizerV2 {
       // Réenregistrer les raccourcis globaux pour s'assurer qu'ils fonctionnent
       await this.registerGlobalShortcuts();
       
-      // Mettre à jour l'UI avec les informations de raccourci
+      // CORRECTION: Mettre à jour l'UI avec les informations de raccourci
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        console.log('DofusOrganizerV2: Sending updated windows to config after shortcut loading');
         this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
       }
       
@@ -1047,63 +1044,51 @@ class DofusOrganizerV2 {
         const windows = await this.windowManager.getDofusWindows();
         console.log(`DofusOrganizerV2: WindowManager returned ${windows.length} windows`);
         
-        const hasChanged = JSON.stringify(windows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive, dofusClass: w.dofusClass }))) !== 
-                          JSON.stringify(this.dofusWindows.map(w => ({ id: w.id, title: w.title, isActive: w.isActive, dofusClass: w.dofusClass })));
+        // CORRECTION: Toujours mettre à jour les données
+        const hasChanged = JSON.stringify(windows.map(w => ({ id: w.id, title: w.title, character: w.character, dofusClass: w.dofusClass }))) !== 
+                          JSON.stringify(this.dofusWindows.map(w => ({ id: w.id, title: w.title, character: w.character, dofusClass: w.dofusClass })));
         
-        // FORCE UPDATE: Toujours mettre à jour le tableau pour s'assurer que l'IPC obtient des données fraîches
-        const forceUpdate = this.dofusWindows.length === 0 && windows.length > 0;
+        console.log(`DofusOrganizerV2: Data comparison - hasChanged: ${hasChanged}`);
+        console.log('DofusOrganizerV2: New windows:', windows.map(w => ({ character: w.character, class: w.dofusClass })));
+        console.log('DofusOrganizerV2: Current windows:', this.dofusWindows.map(w => ({ character: w.character, class: w.dofusClass })));
         
-        if (hasChanged || this.dofusWindows.length !== windows.length || forceUpdate) {
-          console.log(`DofusOrganizerV2: Window list updating... (hasChanged: ${hasChanged}, lengthDiff: ${this.dofusWindows.length !== windows.length}, forceUpdate: ${forceUpdate})`);
-          
-          // Charger les raccourcis depuis la config pour chaque fenêtre basé sur le nom du personnage
-          windows.forEach(window => {
-            const existingShortcut = this.shortcutConfig.getCharacterShortcut(window.character, window.dofusClass);
-            if (existingShortcut) {
-              window.shortcut = existingShortcut;
-            }
-          });
-          
-          this.dofusWindows = windows;
-          console.log(`DofusOrganizerV2: Updated dofusWindows array, now has ${this.dofusWindows.length} windows`);
-          this.updateTrayTooltip();
-          
-          // CORRECTION PRINCIPALE: TOUJOURS recharger les raccourcis après un refresh
-          console.log('DofusOrganizerV2: Refresh detected changes, reloading shortcuts...');
-          await this.loadAndRegisterShortcuts();
-          
-          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-            console.log('DofusOrganizerV2: Sending windows-updated to config window');
-            this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
-          }
-          
-          if (this.dockWindow && !this.dockWindow.isDestroyed()) {
-            console.log('DofusOrganizerV2: Sending windows-updated to dock window');
-            this.dockWindow.webContents.send('windows-updated', this.dofusWindows);
-          }
-          
-          // Mettre à jour la visibilité du dock
-          const dockSettings = this.store.get('dock', { enabled: false });
-          if (dockSettings.enabled) {
-            if (this.dofusWindows.filter(w => w.enabled).length > 0) {
-              if (!this.dockWindow) {
-                this.showDockWindow();
-              }
-            } else {
-              this.hideDockWindow();
-            }
-          }
-          
-          // Notifier du changement
-          this.notificationManager.showInfo(
-            `Found ${windows.length} Dofus windows`,
-            { duration: 2000 }
-          );
-        } else {
-          console.log(`DofusOrganizerV2: No changes in window list (current: ${this.dofusWindows.length}, new: ${windows.length})`);
-          // Mais quand même mettre à jour le tableau pour assurer la cohérence
-          this.dofusWindows = windows;
+        // CORRECTION CRITIQUE: TOUJOURS mettre à jour les données
+        this.dofusWindows = windows;
+        console.log(`DofusOrganizerV2: Updated dofusWindows array, now has ${this.dofusWindows.length} windows`);
+        this.updateTrayTooltip();
+        
+        // CORRECTION PRINCIPALE: TOUJOURS recharger les raccourcis après un refresh
+        console.log('DofusOrganizerV2: Refresh detected changes, reloading shortcuts...');
+        await this.loadAndRegisterShortcuts();
+        
+        // CORRECTION: Toujours notifier les fenêtres des nouvelles données
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          console.log('DofusOrganizerV2: Sending windows-updated to config window');
+          this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
         }
+        
+        if (this.dockWindow && !this.dockWindow.isDestroyed()) {
+          console.log('DofusOrganizerV2: Sending windows-updated to dock window');
+          this.dockWindow.webContents.send('windows-updated', this.dofusWindows);
+        }
+        
+        // Mettre à jour la visibilité du dock
+        const dockSettings = this.store.get('dock', { enabled: false });
+        if (dockSettings.enabled) {
+          if (this.dofusWindows.filter(w => w.enabled).length > 0) {
+            if (!this.dockWindow) {
+              this.showDockWindow();
+            }
+          } else {
+            this.hideDockWindow();
+          }
+        }
+        
+        // Notifier du changement
+        this.notificationManager.showInfo(
+          `Found ${windows.length} Dofus windows`,
+          { duration: 2000 }
+        );
       } catch (error) {
         console.error('DofusOrganizerV2: Error refreshing windows:', error);
         this.notificationManager.showError('Error refreshing windows', { duration: 3000 });
