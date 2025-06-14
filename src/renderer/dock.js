@@ -91,6 +91,7 @@ class DockRenderer {
         });
 
         sortedWindows.forEach((window, index) => {
+            // Display only character name, not full title
             const displayName = window.customName || window.character;
             const className = this.dofusClasses[window.dofusClass]?.name || 'Feca';
             const shortcutText = window.shortcut || (this.language.shortcut_none || 'No shortcut');
@@ -198,15 +199,6 @@ class DockRenderer {
         if (window.electronAPI && window.electronAPI.resizeDock) {
             window.electronAPI.resizeDock(newWidth, 70);
         }
-    }
-
-    getGameTypeLabel(gameType) {
-        const labels = {
-            'dofus2': 'Dofus 2',
-            'dofus3': 'Dofus 3',
-            'retro': 'Dofus Retro'
-        };
-        return labels[gameType] || 'Dofus';
     }
 
     escapeHtml(text) {
@@ -378,7 +370,7 @@ const dockRenderer = new DockRenderer();
 // Export for global access if needed
 window.dockRenderer = dockRenderer;
 
-// Add additional CSS for class system features
+// Add additional CSS for enhanced features
 const additionalStyle = document.createElement('style');
 additionalStyle.textContent = `
     .index-badge {
@@ -445,12 +437,6 @@ additionalStyle.textContent = `
         width: 80%;
     }
 
-    .dock-item.window-item:nth-child(1) .index-badge { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-    .dock-item.window-item:nth-child(2) .index-badge { background: linear-gradient(135deg, #f39c12, #e67e22); }
-    .dock-item.window-item:nth-child(3) .index-badge { background: linear-gradient(135deg, #2ecc71, #27ae60); }
-    .dock-item.window-item:nth-child(4) .index-badge { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
-    .dock-item.window-item:nth-child(5) .index-badge { background: linear-gradient(135deg, #34495e, #2c3e50); }
-    
     /* Avatar image styling - fill container properly */
     .dock-item img {
         width: 100%;
@@ -464,6 +450,13 @@ additionalStyle.textContent = `
     .dock-item:hover img {
         transform: scale(1.05);
         filter: brightness(1.1);
+    }
+
+    /* Enhanced character name display */
+    .character-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: #2c3e50;
     }
 
     /* Class-specific hover effects */
@@ -506,6 +499,10 @@ additionalStyle.textContent = `
     .dock-item[data-class="sadida"]:hover { 
         border-color: rgba(46, 204, 113, 0.7); 
         background: rgba(46, 204, 113, 0.1);
+    }
+    .dock-item[data-class="steamer"]:hover { 
+        border-color: rgba(211, 84, 0, 0.7); 
+        background: rgba(211, 84, 0, 0.1);
     }
 
     @media (max-width: 600px) {
