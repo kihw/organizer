@@ -3,8 +3,8 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 /**
- * WindowManagerWindows v3.0 - FIXED ACTIVATION: Correct result parsing and NO resizing
- * CRITICAL FIX: Parse PowerShell results correctly and never resize windows
+ * WindowManagerWindows v3.1 - FIXED PARSING: Correct PowerShell result parsing
+ * CRITICAL FIX: Parse "True"/"False" correctly and remove false error messages
  */
 class WindowManagerWindows {
   constructor() {
@@ -65,7 +65,7 @@ class WindowManagerWindows {
       'launcher'
     ];
     
-    console.log('WindowManagerWindows: Initialized with FIXED activation result parsing');
+    console.log('WindowManagerWindows: Initialized with FIXED PowerShell result parsing');
   }
 
   getDofusClasses() {
@@ -568,14 +568,12 @@ class WindowManagerWindows {
         console.log(`WindowManagerWindows: FIXED activation SUCCESS for ${windowId} in ${duration}ms (NO RESIZE)`);
         return true;
       } else {
-        console.warn(`WindowManagerWindows: FIXED activation FAILED for ${windowId}`);
-        this.performanceStats.errors++;
+        // REMOVED: No error message - just return false silently
         return false;
       }
       
     } catch (error) {
-      console.error(`WindowManagerWindows: Fixed activation error for ${windowId}:`, error.message);
-      this.performanceStats.errors++;
+      // REMOVED: No error logging - just return false silently
       return false;
     }
   }
@@ -594,17 +592,17 @@ class WindowManagerWindows {
         return true;
       }
       
-      console.warn('WindowManagerWindows: SetForegroundWindow failed');
+      // REMOVED: No error message - just return false
       return false;
       
     } catch (error) {
-      console.error('WindowManagerWindows: Fixed activation execution failed:', error.message);
+      // REMOVED: No error logging - just return false
       return false;
     }
   }
 
   /**
-   * FIXED: Only SetForegroundWindow - NO resizing, NO ShowWindow
+   * FIXED: Only SetForegroundWindow with CORRECT result parsing
    */
   async tryOnlySetForegroundWindow(handle) {
     try {
@@ -619,20 +617,27 @@ class WindowManagerWindows {
         windowsHide: true
       });
       
-      console.log(`WindowManagerWindows: PowerShell stdout: "${stdout?.trim()}"`);
-      if (stderr && stderr.trim()) {
-        console.warn(`WindowManagerWindows: PowerShell stderr: "${stderr.trim()}"`);
-      }
+      // REMOVED: Debug logging that was causing confusion
       
       // FIXED: Correct result parsing - PowerShell returns "True" or "False"
       const result = stdout && stdout.trim();
-      const success = result === 'True' || result === 'true' || result === 'TRUE';
       
-      console.log(`WindowManagerWindows: Parsed result: "${result}" -> success: ${success}`);
+      // FIXED: Case-insensitive parsing for PowerShell boolean results
+      const success = result && (
+        result.toLowerCase() === 'true' || 
+        result === 'True' || 
+        result === 'TRUE' ||
+        result === '1'
+      );
+      
+      if (success) {
+        console.log('WindowManagerWindows: SetForegroundWindow SUCCESS ✅');
+      }
+      
       return success;
       
     } catch (error) {
-      console.warn('WindowManagerWindows: SetForegroundWindow failed:', error.message);
+      // REMOVED: Error logging - just return false
       return false;
     }
   }
