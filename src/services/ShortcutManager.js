@@ -24,6 +24,7 @@ class ShortcutManager {
       
       const success = globalShortcut.register(accelerator, () => {
         try {
+          console.log(`ShortcutManager: Executing shortcut ${accelerator} for window ${windowId}`);
           callback();
         } catch (error) {
           console.error('Error executing shortcut callback:', error);
@@ -141,19 +142,7 @@ class ShortcutManager {
           'numsub': 'numsub',
           'nummult': 'nummult',
           'numdiv': 'numdiv',
-          'numdec': 'numdec',
-          // Special characters - keep as is for single character keys
-          ';': ';',
-          '=': '=',
-          ',': ',',
-          '.': '.',
-          '/': '/',
-          '\\': '\\',
-          "'": "'",
-          '`': '`',
-          '[': '[',
-          ']': ']',
-          '-': '-'
+          'numdec': 'numdec'
         };
         
         // Check if it's a mapped key first
@@ -178,15 +167,13 @@ class ShortcutManager {
     try {
       const accelerator = this.convertShortcutToAccelerator(shortcut);
       
-      // Allow single keys and combinations - much more permissive pattern
-      const validPattern = /^(CommandOrControl|Alt|Shift|Super)(\+(CommandOrControl|Alt|Shift|Super))*\+.+$|^.+$/;
-      
-      const isValidFormat = validPattern.test(accelerator);
+      // Much more permissive validation - allow almost any key combination
+      const isValidFormat = accelerator.length > 0;
       const isNotConflicting = !this.registeredAccelerators.has(accelerator);
       
       console.log(`ShortcutManager: Validating "${shortcut}" -> "${accelerator}": format=${isValidFormat}, noConflict=${isNotConflicting}`);
       
-      return accelerator.length > 0 && isValidFormat && isNotConflicting;
+      return isValidFormat && isNotConflicting;
     } catch (error) {
       console.error('ShortcutManager: Error validating shortcut:', error);
       return false;
