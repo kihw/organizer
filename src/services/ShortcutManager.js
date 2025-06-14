@@ -58,7 +58,7 @@ class ShortcutManager {
       }
 
       // Ultra-fast validation and conversion
-      const accelerator = this.convertShortcutToAcceleratorFast(shortcut);
+      const accelerator = this.convertShortcutToAccelerator(shortcut);
       if (!accelerator) {
         console.warn(`ShortcutManager: Invalid shortcut format: ${shortcut}`);
         return false;
@@ -214,8 +214,9 @@ class ShortcutManager {
 
   /**
    * ULTRA-FAST: Optimized accelerator conversion with minimal string processing
+   * FIXED: Renamed from convertShortcutToAcceleratorFast to match main.js calls
    */
-  convertShortcutToAcceleratorFast(shortcut) {
+  convertShortcutToAccelerator(shortcut) {
     if (!shortcut) return '';
 
     // Quick cache check
@@ -340,7 +341,7 @@ class ShortcutManager {
     if (!shortcut) return { valid: false, reason: 'Empty shortcut' };
 
     try {
-      const accelerator = this.convertShortcutToAcceleratorFast(shortcut);
+      const accelerator = this.convertShortcutToAccelerator(shortcut);
       
       if (!accelerator) {
         return { valid: false, reason: 'Invalid format' };
