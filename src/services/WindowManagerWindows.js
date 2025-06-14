@@ -52,17 +52,17 @@ class WindowManagerWindows {
     // Créer le script d'activation
     this.createActivationScript();
     
-    console.log('WindowManagerWindows: Initialized with SIMPLIFIED REAL WINDOW ACTIVATION');
+    console.log('WindowManagerWindows: Initialized with CORRECTED HANDLE CONVERSION');
   }
 
   /**
-   * NOUVEAU: Crée un script PowerShell séparé pour l'activation
+   * CORRECTION: Script PowerShell avec conversion de handle corrigée
    */
   async createActivationScript() {
     try {
-      // Créer un script PowerShell simple dans un fichier séparé
+      // Script PowerShell corrigé avec validation du handle
       const scriptContent = `
-param([string]$Handle)
+param([string]$HandleString)
 
 Add-Type -TypeDefinition @"
 using System;
@@ -81,36 +81,89 @@ public class Win32 {
     [DllImport("user32.dll")]
     public static extern bool BringWindowToTop(IntPtr hWnd);
     
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+    
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+    
     public const int SW_RESTORE = 9;
+    public const int SW_SHOW = 5;
 }
 "@
 
-$hwnd = [IntPtr]$Handle
-
-# Si la fenêtre est minimisée, la restaurer
-if ([Win32]::IsIconic($hwnd)) {
-    [Win32]::ShowWindow($hwnd, [Win32]::SW_RESTORE)
-    Start-Sleep -Milliseconds 50
+try {
+    # CORRECTION CRITIQUE: Validation et conversion sécurisée du handle
+    if ([string]::IsNullOrEmpty($HandleString)) {
+        Write-Host "Error: Handle string is null or empty"
+        return $false
+    }
+    
+    # Convertir le string en nombre puis en IntPtr
+    $handleNumber = 0
+    if (-not [long]::TryParse($HandleString, [ref]$handleNumber)) {
+        Write-Host "Error: Cannot parse handle string '$HandleString' to number"
+        return $false
+    }
+    
+    if ($handleNumber -eq 0) {
+        Write-Host "Error: Handle number is zero"
+        return $false
+    }
+    
+    # Créer l'IntPtr à partir du nombre
+    $hwnd = [IntPtr]::new($handleNumber)
+    
+    Write-Host "Processing handle: $HandleString -> $handleNumber -> $hwnd"
+    
+    # Vérifier que la fenêtre existe
+    if (-not [Win32]::IsWindow($hwnd)) {
+        Write-Host "Error: Handle does not point to a valid window"
+        return $false
+    }
+    
+    # Vérifier que la fenêtre est visible
+    if (-not [Win32]::IsWindowVisible($hwnd)) {
+        Write-Host "Warning: Window is not visible, showing it"
+        [Win32]::ShowWindow($hwnd, [Win32]::SW_SHOW)
+        Start-Sleep -Milliseconds 100
+    }
+    
+    # Si la fenêtre est minimisée, la restaurer
+    if ([Win32]::IsIconic($hwnd)) {
+        Write-Host "Window is minimized, restoring"
+        [Win32]::ShowWindow($hwnd, [Win32]::SW_RESTORE)
+        Start-Sleep -Milliseconds 100
+    }
+    
+    # Amener au premier plan
+    Write-Host "Bringing window to top"
+    $bringResult = [Win32]::BringWindowToTop($hwnd)
+    
+    # Activer la fenêtre
+    Write-Host "Setting foreground window"
+    $result = [Win32]::SetForegroundWindow($hwnd)
+    
+    Write-Host "BringWindowToTop result: $bringResult"
+    Write-Host "SetForegroundWindow result: $result"
+    
+    # Retourner le résultat
+    return $result
+    
+} catch {
+    Write-Host "Exception during activation: $_"
+    return $false
 }
-
-# Amener au premier plan
-[Win32]::BringWindowToTop($hwnd)
-
-# Activer la fenêtre
-$result = [Win32]::SetForegroundWindow($hwnd)
-
-# Retourner le résultat
-$result
 `;
 
       // Écrire le script dans un fichier temporaire
-      this.activationScriptPath = path.join(os.tmpdir(), 'dofus-activate.ps1');
+      this.activationScriptPath = path.join(os.tmpdir(), 'dofus-activate-fixed.ps1');
       fs.writeFileSync(this.activationScriptPath, scriptContent, 'utf8');
       
-      console.log(`WindowManagerWindows: Created activation script at ${this.activationScriptPath}`);
+      console.log(`WindowManagerWindows: Created CORRECTED activation script at ${this.activationScriptPath}`);
       return true;
     } catch (error) {
-      console.error('WindowManagerWindows: Failed to create activation script:', error);
+      console.error('WindowManagerWindows: Failed to create corrected activation script:', error);
       return false;
     }
   }
@@ -145,7 +198,7 @@ $result
       }
       this.lastWindowCheck = now;
 
-      console.log('WindowManagerWindows: Starting simplified window detection...');
+      console.log('WindowManagerWindows: Starting CORRECTED window detection...');
       
       // Essayer d'abord la méthode PowerShell simple (la plus fiable)
       let windows = await this.detectWithSimplePowerShell();
@@ -491,11 +544,11 @@ $result
   }
 
   /**
-   * MÉTHODE SIMPLIFIÉE: Activation directe via script PowerShell externe
+   * CORRECTION MAJEURE: Activation avec validation et conversion sécurisée du handle
    */
   async activateWindow(windowId) {
     try {
-      console.log(`WindowManagerWindows: SIMPLIFIED activation for ${windowId}`);
+      console.log(`WindowManagerWindows: CORRECTED activation for ${windowId}`);
       
       // CORRECTION CRITIQUE: Chercher le handle dans tous les mappings possibles
       let realHandle = this.realWindowHandles.get(windowId);
@@ -539,26 +592,29 @@ $result
         }
       }
       
-      // MÉTHODE SIMPLIFIÉE: Utiliser le script externe si disponible
+      // MÉTHODE CORRIGÉE: Utiliser le script externe avec validation
       if (this.activationScriptPath && fs.existsSync(this.activationScriptPath)) {
         try {
-          console.log(`WindowManagerWindows: Using external script for activation: ${this.activationScriptPath}`);
+          console.log(`WindowManagerWindows: Using CORRECTED external script for activation`);
           
-          // Exécuter le script PowerShell externe
-          const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.activationScriptPath}" -Handle ${realHandle}`;
+          // CORRECTION: Passer le handle comme string au script
+          const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.activationScriptPath}" -HandleString "${realHandle}"`;
           
-          const { stdout, stderr } = await execAsync(command, { timeout: 2000 });
+          const { stdout, stderr } = await execAsync(command, { timeout: 3000 });
           
           if (stderr && stderr.trim()) {
             console.warn(`WindowManagerWindows: Script stderr: ${stderr}`);
           }
           
-          const success = stdout.trim() === 'True';
+          console.log(`WindowManagerWindows: Script stdout: ${stdout}`);
+          
+          // Le script retourne True/False
+          const success = stdout.includes('True') || stdout.includes('$true');
           
           if (success) {
             this.activationCache.set(cacheKey, now);
             this.updateActiveState(windowId);
-            console.log(`WindowManagerWindows: SCRIPT activation SUCCESS for ${windowId}`);
+            console.log(`WindowManagerWindows: CORRECTED script activation SUCCESS for ${windowId}`);
             return true;
           } else {
             console.warn(`WindowManagerWindows: Script activation FAILED for ${windowId}`);
@@ -568,49 +624,54 @@ $result
         }
       }
       
-      // MÉTHODE DIRECTE: Commande PowerShell inline si le script échoue
+      // MÉTHODE ALTERNATIVE: Commande PowerShell inline simplifiée
       try {
-        console.log(`WindowManagerWindows: Using direct PowerShell command for activation`);
+        console.log(`WindowManagerWindows: Using SIMPLIFIED PowerShell command for activation`);
         
-        // Commande PowerShell simplifiée
-        const command = `powershell.exe -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; [Win32]::SetForegroundWindow([IntPtr]${realHandle})"`;
+        // Commande PowerShell ultra-simplifiée
+        const command = `powershell.exe -Command "[System.Runtime.InteropServices.DllImport('user32.dll')] param(); Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace User32; [User32.Win32]::SetForegroundWindow([IntPtr]${realHandle})"`;
         
-        const { stdout } = await execAsync(command, { timeout: 1000 });
+        const { stdout } = await execAsync(command, { timeout: 2000 });
         
-        const success = stdout.trim() === 'True';
+        const success = stdout.includes('True') || stdout.trim() === 'True';
         
         if (success) {
           this.activationCache.set(cacheKey, now);
           this.updateActiveState(windowId);
-          console.log(`WindowManagerWindows: DIRECT activation SUCCESS for ${windowId}`);
+          console.log(`WindowManagerWindows: SIMPLIFIED activation SUCCESS for ${windowId}`);
           return true;
         } else {
-          console.warn(`WindowManagerWindows: Direct activation FAILED for ${windowId}`);
+          console.warn(`WindowManagerWindows: Simplified activation FAILED for ${windowId}`);
         }
       } catch (directError) {
-        console.warn(`WindowManagerWindows: Direct activation failed: ${directError.message}`);
+        console.warn(`WindowManagerWindows: Simplified activation failed: ${directError.message}`);
       }
       
-      // MÉTHODE ALTERNATIVE: Utiliser la commande native de Windows
+      // MÉTHODE DE DERNIER RECOURS: Utiliser AppActivate
       try {
-        console.log(`WindowManagerWindows: Using native Windows command for activation`);
+        console.log(`WindowManagerWindows: Using AppActivate as last resort for activation`);
         
-        // Utiliser la commande native de Windows
-        const command = `cmd.exe /c "echo Set WshShell = WScript.CreateObject(\\"WScript.Shell\\") > %TEMP%\\activate.vbs && echo WshShell.AppActivate ${realHandle} >> %TEMP%\\activate.vbs && cscript //nologo %TEMP%\\activate.vbs"`;
+        // Utiliser AppActivate avec le PID au lieu du handle
+        const window = this.windows.get(windowId);
+        const pid = window?.info?.pid;
         
-        await execAsync(command, { timeout: 1000 });
-        
-        // Supposer que ça a fonctionné
-        this.activationCache.set(cacheKey, now);
-        this.updateActiveState(windowId);
-        console.log(`WindowManagerWindows: NATIVE activation attempted for ${windowId}`);
-        return true;
-      } catch (nativeError) {
-        console.warn(`WindowManagerWindows: Native activation failed: ${nativeError.message}`);
+        if (pid && pid !== '0') {
+          const command = `powershell.exe -Command "$shell = New-Object -ComObject WScript.Shell; $shell.AppActivate(${pid})"`;
+          
+          await execAsync(command, { timeout: 1000 });
+          
+          // Supposer que ça a fonctionné
+          this.activationCache.set(cacheKey, now);
+          this.updateActiveState(windowId);
+          console.log(`WindowManagerWindows: AppActivate attempted for ${windowId} (PID: ${pid})`);
+          return true;
+        }
+      } catch (appActivateError) {
+        console.warn(`WindowManagerWindows: AppActivate failed: ${appActivateError.message}`);
       }
       
       // Si toutes les méthodes ont échoué
-      console.error(`WindowManagerWindows: ALL activation methods failed for ${windowId}`);
+      console.error(`WindowManagerWindows: ALL CORRECTED activation methods failed for ${windowId}`);
       return false;
       
     } catch (error) {
@@ -815,7 +876,7 @@ $result
       }
     }
     
-    console.log('WindowManagerWindows: SIMPLIFIED activation system cleaned up');
+    console.log('WindowManagerWindows: CORRECTED activation system cleaned up');
   }
 }
 
