@@ -1,6 +1,6 @@
 {
   "name": "dofus-organizer",
-  "version": "0.1.0",
+  "version": "0.2.0-dev",
   "description": "A modern cross-platform Dofus Window Organizer with keyboard shortcuts, window management, and navigation dock",
   "main": "src/main.js",
   "scripts": {
