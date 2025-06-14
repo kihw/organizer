@@ -3,17 +3,18 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 const CacheManager = require('../core/CacheManager');
 
 /**
- * WindowManager v2.2 - ULTRA-SIMPLIFIED: Direct platform calls with minimal overhead
- * CRITICAL FIXES: Removed all complex fallback chains and unnecessary abstractions
+ * WindowManager v2.3 - CRITICAL FIX: Ensure proper data return and synchronization
+ * FIXED: Guarantee that detected windows are properly returned to the interface
  */
 class WindowManager {
   constructor() {
     this.windows = new Map();
-    this.windowCache = new CacheManager({ maxSize: 50, defaultTTL: 5000 }); // Aggressive caching
-    this.activationCache = new CacheManager({ maxSize: 20, defaultTTL: 500 }); // Very short cache
+    this.windowCache = new CacheManager({ maxSize: 50, defaultTTL: 2000 }); // Reduced TTL for faster updates
+    this.activationCache = new CacheManager({ maxSize: 20, defaultTTL: 500 });
     this.isScanning = false;
     this.lastSuccessfulScan = 0;
     this.consecutiveFailures = 0;
+    this.lastDetectedWindows = []; // CRITICAL: Store last detected windows
     this.stats = {
       scans: 0,
       activations: 0,
@@ -27,7 +28,7 @@ class WindowManager {
     // Direct platform manager - no fallbacks
     this.platformManager = this.createPlatformManager();
 
-    console.log('WindowManager: Initialized with ULTRA-SIMPLIFIED direct detection');
+    console.log('WindowManager: Initialized with CRITICAL data return fix');
   }
 
   /**
@@ -61,73 +62,79 @@ class WindowManager {
   }
 
   /**
-   * ULTRA-FAST: Direct window detection with minimal validation
+   * CRITICAL FIX: Direct window detection with guaranteed return
    */
   async getDofusWindows() {
     const startTime = Date.now();
 
     try {
-      // Ultra-fast cache check
-      const cacheKey = 'windows';
-      const cached = this.windowCache.get(cacheKey);
-      if (cached) {
-        this.stats.cacheHits++;
-        console.log(`WindowManager: Cache hit - returning ${cached.length} windows`);
-        return cached;
-      }
+      console.log('WindowManager: CRITICAL FIX - Starting guaranteed detection...');
+
+      // CRITICAL: Always try fresh detection, ignore cache for now
+      console.log('WindowManager: Bypassing cache for guaranteed fresh detection');
 
       // Fail-fast if no platform manager
       if (!this.platformManager) {
-        console.error('WindowManager: No platform manager - cannot detect windows');
-        return [];
+        console.error('WindowManager: No platform manager - returning last detected windows');
+        return this.lastDetectedWindows;
       }
 
       // Prevent concurrent scans with simple lock
       if (this.isScanning) {
-        console.log('WindowManager: Scan in progress - returning empty array');
-        return [];
+        console.log('WindowManager: Scan in progress - returning last detected windows');
+        return this.lastDetectedWindows;
       }
 
       this.isScanning = true;
       this.stats.scans++;
 
-      console.log('WindowManager: Starting ultra-fast platform detection...');
+      console.log('WindowManager: Starting platform detection with guaranteed return...');
 
-      // Direct platform call with aggressive timeout
-      const windows = await this.performUltraFastDetection();
+      // CRITICAL FIX: Direct platform call with proper error handling
+      const windows = await this.performGuaranteedDetection();
 
-      // Cache aggressively for performance
-      if (windows && windows.length >= 0) {
-        this.windowCache.set(cacheKey, windows);
+      // CRITICAL: Always update last detected windows
+      if (windows && Array.isArray(windows)) {
+        this.lastDetectedWindows = windows;
+        console.log(`WindowManager: CRITICAL FIX - Updated lastDetectedWindows with ${windows.length} windows`);
+        
+        // Cache the result
+        this.windowCache.set('windows', windows);
         this.lastSuccessfulScan = Date.now();
         this.consecutiveFailures = 0;
       } else {
+        console.warn('WindowManager: Invalid windows data, keeping last detected');
         this.consecutiveFailures++;
       }
 
       const duration = Date.now() - startTime;
       this.updateScanStats(duration);
 
-      console.log(`WindowManager: Detection completed - found ${windows.length} windows in ${duration}ms`);
-      return windows;
+      console.log(`WindowManager: CRITICAL FIX - Returning ${this.lastDetectedWindows.length} windows in ${duration}ms`);
+      return this.lastDetectedWindows;
 
     } catch (error) {
       console.error('WindowManager: Detection failed:', error.message);
       this.stats.failures++;
       this.consecutiveFailures++;
-      return [];
+      
+      // CRITICAL: Always return something, even if it's the last detected windows
+      console.log(`WindowManager: Error fallback - returning ${this.lastDetectedWindows.length} last detected windows`);
+      return this.lastDetectedWindows;
     } finally {
       this.isScanning = false;
     }
   }
 
   /**
-   * ULTRA-FAST: Direct platform detection with minimal overhead
+   * CRITICAL FIX: Guaranteed detection with proper error handling
    */
-  async performUltraFastDetection() {
+  async performGuaranteedDetection() {
     try {
-      // Ultra-aggressive timeout based on consecutive failures
-      const timeout = this.consecutiveFailures > 3 ? 1000 : 2000;
+      console.log('WindowManager: Performing guaranteed platform detection...');
+
+      // CRITICAL: Increased timeout and better error handling
+      const timeout = 5000; // 5 seconds timeout
 
       const windows = await Promise.race([
         this.platformManager.getDofusWindows(),
@@ -136,35 +143,47 @@ class WindowManager {
         )
       ]);
 
-      // Minimal validation - trust the platform manager
-      return this.validateMinimal(windows || []);
+      console.log(`WindowManager: Platform detection returned ${windows ? windows.length : 'null'} windows`);
+
+      // CRITICAL: Validate and ensure we return an array
+      return this.validateAndEnsureArray(windows);
 
     } catch (error) {
       console.warn('WindowManager: Platform detection failed:', error.message);
+      // Return empty array instead of null/undefined
       return [];
     }
   }
 
   /**
-   * MINIMAL: Basic validation only
+   * CRITICAL: Ensure we always return a valid array
    */
-  validateMinimal(windows) {
-    if (!Array.isArray(windows)) {
-      console.warn('WindowManager: Invalid windows data - not an array');
+  validateAndEnsureArray(windows) {
+    if (!windows) {
+      console.log('WindowManager: Null/undefined windows, returning empty array');
       return [];
     }
 
-    // Minimal filtering - only check essential fields
-    return windows.filter(window => 
+    if (!Array.isArray(windows)) {
+      console.warn('WindowManager: Invalid windows data - not an array, returning empty array');
+      return [];
+    }
+
+    // Basic validation - only check essential fields
+    const validWindows = windows.filter(window => 
       window && 
       window.id && 
       typeof window.id === 'string' &&
-      window.title
+      window.title &&
+      window.character
     );
+
+    console.log(`WindowManager: Validated ${validWindows.length}/${windows.length} windows`);
+    return validWindows;
   }
 
   /**
-   * ULTRA-FAST: Direct activation with minimal overhead
+   * CRITICAL FIX: Direct activation with minimal overhead
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
@@ -231,7 +250,14 @@ class WindowManager {
    * MINIMAL: Update active state with minimal processing
    */
   updateActiveStateMinimal(activeWindowId) {
-    // Only update if we have windows in memory
+    // Update in lastDetectedWindows
+    this.lastDetectedWindows.forEach(window => {
+      if (window && window.id) {
+        window.isActive = window.id === activeWindowId;
+      }
+    });
+
+    // Also update in windows map if it exists
     for (const [windowId, windowData] of this.windows) {
       if (windowData && windowData.info) {
         windowData.info.isActive = windowId === activeWindowId;
@@ -324,7 +350,8 @@ class WindowManager {
       cacheHitRate: this.stats.scans > 0 ? (this.stats.cacheHits / this.stats.scans * 100).toFixed(1) : 0,
       lastSuccessfulScan: this.lastSuccessfulScan,
       windowCacheSize: this.windowCache.cache.size,
-      activationCacheSize: this.activationCache.cache.size
+      activationCacheSize: this.activationCache.cache.size,
+      lastDetectedCount: this.lastDetectedWindows.length
     };
   }
 
@@ -349,6 +376,7 @@ class WindowManager {
       this.windowCache.clear();
       this.activationCache.clear();
       this.windows.clear();
+      this.lastDetectedWindows = [];
 
       if (this.platformManager && typeof this.platformManager.cleanup === 'function') {
         this.platformManager.cleanup();
@@ -379,7 +407,8 @@ class WindowManager {
       status: this.determineHealthStatus(stats, timeSinceLastScan),
       stats: stats,
       issues: this.identifyIssues(stats, timeSinceLastScan),
-      recommendations: this.generateRecommendations(stats)
+      recommendations: this.generateRecommendations(stats),
+      lastDetectedWindows: this.lastDetectedWindows.length
     };
   }
 
