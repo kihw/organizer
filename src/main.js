@@ -516,14 +516,19 @@ class DofusOrganizer {
         this.updateTrayMenu();
       }
       
-      // Handle window shortcut changes - now using config file
+      // Handle window shortcut changes - now using config file with character names
       const shortcutChanges = Object.keys(settings).filter(key => key.startsWith('shortcuts.'));
       if (shortcutChanges.length > 0) {
         console.log('DofusOrganizer: Window shortcuts changed, updating config file...');
         shortcutChanges.forEach(key => {
           const windowId = key.replace('shortcuts.', '');
           const shortcut = settings[key];
-          this.shortcutConfig.setWindowShortcut(windowId, shortcut);
+          
+          // Find the window to get character info
+          const window = this.dofusWindows.find(w => w.id === windowId);
+          if (window) {
+            this.shortcutConfig.setWindowShortcut(windowId, shortcut, window.character, window.dofusClass);
+          }
         });
         setTimeout(() => this.loadAndRegisterShortcuts(), 100);
       }
@@ -585,8 +590,15 @@ class DofusOrganizer {
         return false;
       }
       
-      // Save shortcut to config file
-      const success = this.shortcutConfig.setWindowShortcut(windowId, shortcut);
+      // Find the window to get character info
+      const window = this.dofusWindows.find(w => w.id === windowId);
+      if (!window) {
+        console.warn(`IPC: Window not found: ${windowId}`);
+        return false;
+      }
+      
+      // Save shortcut to config file with character info
+      const success = this.shortcutConfig.setWindowShortcut(windowId, shortcut, window.character, window.dofusClass);
       if (!success) {
         console.warn(`IPC: Failed to save shortcut to config: ${shortcut}`);
         return false;
@@ -602,8 +614,15 @@ class DofusOrganizer {
     ipcMain.handle('remove-shortcut', (event, windowId) => {
       console.log(`IPC: remove-shortcut called for: ${windowId}`);
       
-      // Remove from config file
-      this.shortcutConfig.removeWindowShortcut(windowId);
+      // Find the window to get character info
+      const window = this.dofusWindows.find(w => w.id === windowId);
+      if (window) {
+        // Remove from config file using character info
+        this.shortcutConfig.removeCharacterShortcut(window.character, window.dofusClass);
+      } else {
+        // Fallback: remove by windowId
+        this.shortcutConfig.removeWindowShortcut(windowId);
+      }
       
       // Remove from shortcut manager
       this.shortcutManager.removeWindowShortcut(windowId);
@@ -722,22 +741,19 @@ class DofusOrganizer {
     
     console.log('DofusOrganizer: Loading and registering window shortcuts from config file...');
     
-    const shortcuts = this.shortcutConfig.getAllWindowShortcuts();
-    console.log(`DofusOrganizer: Found ${Object.keys(shortcuts).length} stored shortcuts in config`);
-    
-    // Match shortcuts to current windows and update character profiles
     let registeredCount = 0;
     
     this.dofusWindows.forEach(window => {
       // Update character profile in config
       this.shortcutConfig.setCharacterProfile(window.id, window.character, window.dofusClass);
       
-      // Check if this window has a stored shortcut
-      const shortcut = shortcuts[window.id];
-      if (shortcut) {
-        console.log(`DofusOrganizer: Registering shortcut ${shortcut} for window ${window.id} (${window.character})`);
+      // Try to link existing shortcut to this window
+      const existingShortcut = this.shortcutConfig.linkShortcutToWindow(window.character, window.dofusClass, window.id);
+      
+      if (existingShortcut) {
+        console.log(`DofusOrganizer: Linking existing shortcut ${existingShortcut} to window ${window.id} (${window.character})`);
         
-        const success = this.shortcutManager.setWindowShortcut(window.id, shortcut, async () => {
+        const success = this.shortcutManager.setWindowShortcut(window.id, existingShortcut, async () => {
           console.log(`ShortcutManager: Executing shortcut for window ${window.id}`);
           await this.windowManager.activateWindow(window.id);
         });
@@ -745,16 +761,15 @@ class DofusOrganizer {
         if (success) {
           registeredCount++;
           // Update window info with shortcut
-          window.shortcut = shortcut;
+          window.shortcut = existingShortcut;
         } else {
-          console.warn(`DofusOrganizer: Failed to register shortcut ${shortcut} for window ${window.id}`);
+          console.warn(`DofusOrganizer: Failed to register shortcut ${existingShortcut} for window ${window.id}`);
         }
       }
     });
     
     // Clean up old entries in config
-    const activeWindowIds = this.dofusWindows.map(w => w.id);
-    this.shortcutConfig.cleanupOldEntries(activeWindowIds);
+    this.shortcutConfig.cleanupOldEntries(this.dofusWindows);
     
     console.log(`DofusOrganizer: Successfully registered ${registeredCount} window shortcuts`);
     this.shortcutsLoaded = true;
@@ -784,11 +799,11 @@ class DofusOrganizer {
       if (hasChanged || this.dofusWindows.length !== windows.length || forceUpdate) {
         console.log(`DofusOrganizer: Window list updating... (hasChanged: ${hasChanged}, lengthDiff: ${this.dofusWindows.length !== windows.length}, forceUpdate: ${forceUpdate})`);
         
-        // Load shortcuts from config for each window
+        // Load shortcuts from config for each window based on character name
         windows.forEach(window => {
-          const storedShortcut = this.shortcutConfig.getWindowShortcut(window.id);
-          if (storedShortcut) {
-            window.shortcut = storedShortcut;
+          const existingShortcut = this.shortcutConfig.getCharacterShortcut(window.character, window.dofusClass);
+          if (existingShortcut) {
+            window.shortcut = existingShortcut;
           }
         });
         

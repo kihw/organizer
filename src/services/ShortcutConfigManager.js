@@ -10,13 +10,13 @@ class ShortcutConfigManager {
       version: '1.0.0',
       lastUpdated: new Date().toISOString(),
       shortcuts: {
-        windows: {},
+        characters: {}, // Raccourcis par nom de personnage et classe
         global: {
           nextWindow: 'Ctrl+Tab',
           toggleShortcuts: 'Ctrl+Shift+D'
         }
       },
-      characters: {}
+      characters: {} // Profils de personnages
     };
     
     this.ensureConfigDirectory();
@@ -53,6 +53,10 @@ class ShortcutConfigManager {
           shortcuts: {
             ...this.config.shortcuts,
             ...loadedConfig.shortcuts,
+            characters: {
+              ...this.config.shortcuts.characters,
+              ...loadedConfig.shortcuts?.characters
+            },
             global: {
               ...this.config.shortcuts.global,
               ...loadedConfig.shortcuts?.global
@@ -61,7 +65,7 @@ class ShortcutConfigManager {
         };
         
         console.log('ShortcutConfigManager: Loaded shortcuts config from file');
-        console.log(`ShortcutConfigManager: Found ${Object.keys(this.config.shortcuts.windows).length} window shortcuts`);
+        console.log(`ShortcutConfigManager: Found ${Object.keys(this.config.shortcuts.characters).length} character shortcuts`);
         console.log(`ShortcutConfigManager: Found ${Object.keys(this.config.characters).length} character profiles`);
       } else {
         console.log('ShortcutConfigManager: No existing config file, using defaults');
@@ -92,35 +96,72 @@ class ShortcutConfigManager {
     }
   }
 
-  // Window shortcuts management
-  setWindowShortcut(windowId, shortcut) {
-    if (!windowId || !shortcut) return false;
+  // Génère une clé unique pour un personnage basée sur son nom et sa classe
+  generateCharacterKey(character, dofusClass) {
+    const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedClass = dofusClass.toLowerCase();
+    return `${normalizedChar}_${normalizedClass}`;
+  }
+
+  // Window shortcuts management - maintenant basé sur les noms de personnages
+  setWindowShortcut(windowId, shortcut, character, dofusClass) {
+    if (!windowId || !shortcut || !character) return false;
     
     try {
-      this.config.shortcuts.windows[windowId] = {
+      const characterKey = this.generateCharacterKey(character, dofusClass);
+      
+      this.config.shortcuts.characters[characterKey] = {
         shortcut: shortcut,
+        character: character,
+        class: dofusClass,
+        windowId: windowId, // Garde une référence à la fenêtre actuelle
         lastUsed: new Date().toISOString(),
-        usageCount: (this.config.shortcuts.windows[windowId]?.usageCount || 0) + 1
+        usageCount: (this.config.shortcuts.characters[characterKey]?.usageCount || 0) + 1
       };
       
       this.saveConfig();
-      console.log(`ShortcutConfigManager: Set shortcut ${shortcut} for window ${windowId}`);
+      console.log(`ShortcutConfigManager: Set shortcut ${shortcut} for character ${character} (${dofusClass})`);
       return true;
     } catch (error) {
-      console.error('ShortcutConfigManager: Error setting window shortcut:', error);
+      console.error('ShortcutConfigManager: Error setting character shortcut:', error);
       return false;
     }
   }
 
   getWindowShortcut(windowId) {
-    return this.config.shortcuts.windows[windowId]?.shortcut || null;
+    // Trouve le raccourci par windowId (pour compatibilité)
+    for (const [characterKey, shortcutData] of Object.entries(this.config.shortcuts.characters)) {
+      if (shortcutData.windowId === windowId) {
+        return shortcutData.shortcut;
+      }
+    }
+    return null;
+  }
+
+  getCharacterShortcut(character, dofusClass) {
+    const characterKey = this.generateCharacterKey(character, dofusClass);
+    return this.config.shortcuts.characters[characterKey]?.shortcut || null;
   }
 
   removeWindowShortcut(windowId) {
-    if (this.config.shortcuts.windows[windowId]) {
-      delete this.config.shortcuts.windows[windowId];
+    // Trouve et supprime le raccourci par windowId
+    for (const [characterKey, shortcutData] of Object.entries(this.config.shortcuts.characters)) {
+      if (shortcutData.windowId === windowId) {
+        delete this.config.shortcuts.characters[characterKey];
+        this.saveConfig();
+        console.log(`ShortcutConfigManager: Removed shortcut for window ${windowId}`);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  removeCharacterShortcut(character, dofusClass) {
+    const characterKey = this.generateCharacterKey(character, dofusClass);
+    if (this.config.shortcuts.characters[characterKey]) {
+      delete this.config.shortcuts.characters[characterKey];
       this.saveConfig();
-      console.log(`ShortcutConfigManager: Removed shortcut for window ${windowId}`);
+      console.log(`ShortcutConfigManager: Removed shortcut for character ${character} (${dofusClass})`);
       return true;
     }
     return false;
@@ -128,10 +169,42 @@ class ShortcutConfigManager {
 
   getAllWindowShortcuts() {
     const shortcuts = {};
-    Object.keys(this.config.shortcuts.windows).forEach(windowId => {
-      shortcuts[windowId] = this.config.shortcuts.windows[windowId].shortcut;
+    Object.values(this.config.shortcuts.characters).forEach(shortcutData => {
+      if (shortcutData.windowId) {
+        shortcuts[shortcutData.windowId] = shortcutData.shortcut;
+      }
     });
     return shortcuts;
+  }
+
+  getAllCharacterShortcuts() {
+    const shortcuts = {};
+    Object.entries(this.config.shortcuts.characters).forEach(([characterKey, shortcutData]) => {
+      shortcuts[characterKey] = {
+        shortcut: shortcutData.shortcut,
+        character: shortcutData.character,
+        class: shortcutData.class
+      };
+    });
+    return shortcuts;
+  }
+
+  // Méthode pour associer un raccourci existant à une nouvelle fenêtre
+  linkShortcutToWindow(character, dofusClass, windowId) {
+    const characterKey = this.generateCharacterKey(character, dofusClass);
+    const shortcutData = this.config.shortcuts.characters[characterKey];
+    
+    if (shortcutData) {
+      // Met à jour l'ID de fenêtre pour ce personnage
+      shortcutData.windowId = windowId;
+      shortcutData.lastSeen = new Date().toISOString();
+      this.saveConfig();
+      
+      console.log(`ShortcutConfigManager: Linked existing shortcut ${shortcutData.shortcut} to window ${windowId} for ${character}`);
+      return shortcutData.shortcut;
+    }
+    
+    return null;
   }
 
   // Global shortcuts management
@@ -193,7 +266,7 @@ class ShortcutConfigManager {
   }
 
   findCharacterByName(characterName, dofusClass) {
-    // Find a character profile by name and class
+    // Trouve un profil de personnage par nom et classe
     for (const [windowId, profile] of Object.entries(this.config.characters)) {
       if (profile.character.toLowerCase() === characterName.toLowerCase() && 
           profile.class === dofusClass) {
@@ -204,11 +277,16 @@ class ShortcutConfigManager {
   }
 
   // Shortcut validation
-  isShortcutInUse(shortcut, excludeWindowId = null) {
-    // Check window shortcuts
-    for (const [windowId, shortcutData] of Object.entries(this.config.shortcuts.windows)) {
-      if (windowId !== excludeWindowId && shortcutData.shortcut === shortcut) {
-        return { type: 'window', windowId };
+  isShortcutInUse(shortcut, excludeCharacterKey = null) {
+    // Check character shortcuts
+    for (const [characterKey, shortcutData] of Object.entries(this.config.shortcuts.characters)) {
+      if (characterKey !== excludeCharacterKey && shortcutData.shortcut === shortcut) {
+        return { 
+          type: 'character', 
+          characterKey,
+          character: shortcutData.character,
+          class: shortcutData.class
+        };
       }
     }
     
@@ -227,20 +305,32 @@ class ShortcutConfigManager {
     try {
       console.log('ShortcutConfigManager: Starting migration from electron-store...');
       
-      // Migrate window shortcuts
+      // Migrate window shortcuts - convertir en raccourcis de personnages
       const oldShortcuts = electronStore.get('shortcuts', {});
+      const oldClasses = electronStore.get('classes', {});
+      const oldCustomNames = electronStore.get('customNames', {});
       let migratedCount = 0;
       
       Object.keys(oldShortcuts).forEach(windowId => {
         const shortcut = oldShortcuts[windowId];
-        if (shortcut && !this.config.shortcuts.windows[windowId]) {
-          this.config.shortcuts.windows[windowId] = {
-            shortcut: shortcut,
-            lastUsed: new Date().toISOString(),
-            usageCount: 1,
-            migrated: true
-          };
-          migratedCount++;
+        const dofusClass = oldClasses[windowId] || 'feca';
+        const character = oldCustomNames[windowId] || `Player_${windowId}`;
+        
+        if (shortcut) {
+          const characterKey = this.generateCharacterKey(character, dofusClass);
+          
+          if (!this.config.shortcuts.characters[characterKey]) {
+            this.config.shortcuts.characters[characterKey] = {
+              shortcut: shortcut,
+              character: character,
+              class: dofusClass,
+              windowId: windowId,
+              lastUsed: new Date().toISOString(),
+              usageCount: 1,
+              migrated: true
+            };
+            migratedCount++;
+          }
         }
       });
       
@@ -254,9 +344,7 @@ class ShortcutConfigManager {
       });
       
       // Migrate character data
-      const oldClasses = electronStore.get('classes', {});
       const oldInitiatives = electronStore.get('initiatives', {});
-      const oldCustomNames = electronStore.get('customNames', {});
       
       Object.keys(oldClasses).forEach(windowId => {
         if (!this.config.characters[windowId]) {
@@ -283,47 +371,59 @@ class ShortcutConfigManager {
     }
   }
 
-  cleanupOldEntries(activeWindowIds) {
-    // Remove shortcuts for windows that no longer exist
-    const windowIds = Object.keys(this.config.shortcuts.windows);
-    let cleanedCount = 0;
+  cleanupOldEntries(activeWindows) {
+    // Met à jour les windowId pour les personnages actifs
+    const characterUpdates = new Map();
     
-    windowIds.forEach(windowId => {
-      if (!activeWindowIds.includes(windowId)) {
-        // Keep the entry but mark it as inactive
-        if (this.config.shortcuts.windows[windowId]) {
-          this.config.shortcuts.windows[windowId].inactive = true;
-          this.config.shortcuts.windows[windowId].lastInactive = new Date().toISOString();
-        }
-      } else {
-        // Remove inactive flag if window is active again
-        if (this.config.shortcuts.windows[windowId]?.inactive) {
-          delete this.config.shortcuts.windows[windowId].inactive;
-          delete this.config.shortcuts.windows[windowId].lastInactive;
-        }
+    activeWindows.forEach(window => {
+      const characterKey = this.generateCharacterKey(window.character, window.dofusClass);
+      characterUpdates.set(characterKey, window.id);
+    });
+    
+    // Met à jour les windowId dans les raccourcis de personnages
+    let updatedCount = 0;
+    Object.entries(this.config.shortcuts.characters).forEach(([characterKey, shortcutData]) => {
+      const newWindowId = characterUpdates.get(characterKey);
+      if (newWindowId && newWindowId !== shortcutData.windowId) {
+        shortcutData.windowId = newWindowId;
+        shortcutData.lastSeen = new Date().toISOString();
+        updatedCount++;
       }
     });
     
-    // Remove very old inactive entries (older than 30 days)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    // Marque les raccourcis comme inactifs s'ils n'ont pas de fenêtre correspondante
+    Object.entries(this.config.shortcuts.characters).forEach(([characterKey, shortcutData]) => {
+      const hasActiveWindow = characterUpdates.has(characterKey);
+      if (!hasActiveWindow && !shortcutData.inactive) {
+        shortcutData.inactive = true;
+        shortcutData.lastInactive = new Date().toISOString();
+      } else if (hasActiveWindow && shortcutData.inactive) {
+        delete shortcutData.inactive;
+        delete shortcutData.lastInactive;
+      }
+    });
     
-    Object.keys(this.config.shortcuts.windows).forEach(windowId => {
-      const shortcutData = this.config.shortcuts.windows[windowId];
+    // Supprime les raccourcis très anciens (plus de 30 jours d'inactivité)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    let cleanedCount = 0;
+    
+    Object.keys(this.config.shortcuts.characters).forEach(characterKey => {
+      const shortcutData = this.config.shortcuts.characters[characterKey];
       if (shortcutData.inactive && shortcutData.lastInactive) {
         const lastInactiveDate = new Date(shortcutData.lastInactive);
         if (lastInactiveDate < thirtyDaysAgo) {
-          delete this.config.shortcuts.windows[windowId];
+          delete this.config.shortcuts.characters[characterKey];
           cleanedCount++;
         }
       }
     });
     
-    if (cleanedCount > 0) {
+    if (updatedCount > 0 || cleanedCount > 0) {
       this.saveConfig();
-      console.log(`ShortcutConfigManager: Cleaned up ${cleanedCount} old shortcut entries`);
+      console.log(`ShortcutConfigManager: Updated ${updatedCount} character shortcuts, cleaned ${cleanedCount} old entries`);
     }
     
-    return cleanedCount;
+    return { updated: updatedCount, cleaned: cleanedCount };
   }
 
   // Export/Import functionality
@@ -351,6 +451,10 @@ class ShortcutConfigManager {
         shortcuts: {
           ...this.config.shortcuts,
           ...importedConfig.shortcuts,
+          characters: {
+            ...this.config.shortcuts.characters,
+            ...importedConfig.shortcuts?.characters
+          },
           global: {
             ...this.config.shortcuts.global,
             ...importedConfig.shortcuts?.global
@@ -370,15 +474,15 @@ class ShortcutConfigManager {
 
   // Statistics and debugging
   getStatistics() {
-    const windowShortcuts = Object.keys(this.config.shortcuts.windows).length;
-    const activeShortcuts = Object.values(this.config.shortcuts.windows)
+    const characterShortcuts = Object.keys(this.config.shortcuts.characters).length;
+    const activeShortcuts = Object.values(this.config.shortcuts.characters)
       .filter(s => !s.inactive).length;
     const characters = Object.keys(this.config.characters).length;
     
     return {
-      totalWindowShortcuts: windowShortcuts,
-      activeWindowShortcuts: activeShortcuts,
-      inactiveWindowShortcuts: windowShortcuts - activeShortcuts,
+      totalCharacterShortcuts: characterShortcuts,
+      activeCharacterShortcuts: activeShortcuts,
+      inactiveCharacterShortcuts: characterShortcuts - activeShortcuts,
       globalShortcuts: Object.keys(this.config.shortcuts.global).length,
       characters: characters,
       configFile: this.configFile,
