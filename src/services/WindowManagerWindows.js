@@ -1,19 +1,17 @@
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
 
+/**
+ * WindowManagerWindows v2.1 - SIMPLIFIED: Direct PowerShell with reliable window handling
+ * MAJOR SIMPLIFICATION: Removed complex script generation and multiple fallbacks
+ */
 class WindowManagerWindows {
   constructor() {
     this.windows = new Map();
     this.lastWindowCheck = 0;
     this.activationCache = new Map();
-    this.windowIdMapping = new Map(); // ID stable -> handle string
-    this.realWindowHandles = new Map(); // ID stable -> handle numérique RÉEL
-    this.activationScriptPath = null;
-    this.fastActivationScript = null;
+    this.handleMapping = new Map(); // Simple ID -> Handle mapping
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -50,96 +48,7 @@ class WindowManagerWindows {
       'eliotrop': 'eliotrope', 'elio': 'eliotrope', 'hupper': 'huppermage', 'ougi': 'ouginak'
     };
     
-    // Créer les scripts d'activation optimisés
-    this.createOptimizedActivationScripts();
-    
-    console.log('WindowManagerWindows: Initialized with ULTRA-FAST activation system');
-  }
-
-  /**
-   * FIXED: Scripts PowerShell ultra-optimisés et fonctionnels
-   */
-  async createOptimizedActivationScripts() {
-    try {
-      // Script ultra-rapide CORRIGÉ
-      const fastScriptContent = `
-param([string]$Handle)
-
-try {
-    # Conversion rapide du handle
-    $hwnd = [IntPtr]::new([long]$Handle)
-    
-    # Définition des APIs Windows optimisée
-    $signature = @'
-[DllImport("user32.dll")]
-public static extern bool SetForegroundWindow(IntPtr hWnd);
-[DllImport("user32.dll")]
-public static extern bool BringWindowToTop(IntPtr hWnd);
-[DllImport("user32.dll")]
-public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-[DllImport("user32.dll")]
-public static extern bool IsIconic(IntPtr hWnd);
-[DllImport("user32.dll")]
-public static extern bool IsWindow(IntPtr hWnd);
-'@
-
-    Add-Type -MemberDefinition $signature -Name Win32API -Namespace FastActivation
-    
-    # Vérification rapide
-    if (-not [FastActivation.Win32API]::IsWindow($hwnd)) { 
-        Write-Output "False"
-        exit 1
-    }
-    
-    # Restaurer si minimisée
-    if ([FastActivation.Win32API]::IsIconic($hwnd)) {
-        [FastActivation.Win32API]::ShowWindow($hwnd, 9) | Out-Null
-    }
-    
-    # Activation ultra-rapide
-    [FastActivation.Win32API]::BringWindowToTop($hwnd) | Out-Null
-    $result = [FastActivation.Win32API]::SetForegroundWindow($hwnd)
-    
-    Write-Output $result.ToString()
-    
-} catch {
-    Write-Output "False"
-    exit 1
-}
-`;
-
-      // Script de secours CORRIGÉ
-      const backupScriptContent = `
-param([string]$Handle)
-
-try {
-    $signature = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'
-    Add-Type -MemberDefinition $signature -Name SimpleWin32 -Namespace Backup
-    
-    $hwnd = [IntPtr]::new([long]$Handle)
-    $result = [Backup.SimpleWin32]::SetForegroundWindow($hwnd)
-    
-    Write-Output $result.ToString()
-    
-} catch {
-    Write-Output "False"
-    exit 1
-}
-`;
-
-      // Créer les fichiers de script
-      this.fastActivationScript = path.join(os.tmpdir(), 'dofus-fast-activate.ps1');
-      this.activationScriptPath = path.join(os.tmpdir(), 'dofus-backup-activate.ps1');
-      
-      fs.writeFileSync(this.fastActivationScript, fastScriptContent, 'utf8');
-      fs.writeFileSync(this.activationScriptPath, backupScriptContent, 'utf8');
-      
-      console.log('WindowManagerWindows: Created FIXED activation scripts');
-      return true;
-    } catch (error) {
-      console.error('WindowManagerWindows: Failed to create activation scripts:', error);
-      return false;
-    }
+    console.log('WindowManagerWindows: Initialized with SIMPLIFIED direct PowerShell');
   }
 
   getDofusClasses() {
@@ -155,278 +64,184 @@ try {
     return this.dofusClasses[classKey]?.name || 'Feca';
   }
 
-  generateStableWindowId(character, dofusClass, processId) {
-    const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const normalizedClass = dofusClass.toLowerCase();
-    return `${normalizedChar}_${normalizedClass}_${processId}`;
-  }
-
+  /**
+   * SIMPLIFIED: Direct window detection with single PowerShell method
+   */
   async getDofusWindows() {
     try {
-      // Cache moins agressif pour permettre les vraies détections
+      // Simple time-based cache
       const now = Date.now();
-      if (now - this.lastWindowCheck < 2000) { // 2 secondes de cache
+      if (now - this.lastWindowCheck < 5000) { // 5 second cache
         const cachedWindows = Array.from(this.windows.values()).map(w => w.info);
-        console.log(`WindowManagerWindows: Returning ${cachedWindows.length} cached windows (FAST)`);
-        return cachedWindows;
+        if (cachedWindows.length > 0) {
+          console.log(`WindowManagerWindows: Returning ${cachedWindows.length} cached windows`);
+          return cachedWindows;
+        }
       }
       this.lastWindowCheck = now;
 
-      console.log('WindowManagerWindows: Starting CORRECTED window detection...');
+      console.log('WindowManagerWindows: Starting direct PowerShell detection...');
       
-      // Essayer d'abord la méthode PowerShell simple (la plus fiable)
-      let windows = await this.detectWithSimplePowerShell();
-      
-      // Si ça échoue, essayer la méthode tasklist
-      if (!windows || windows.length === 0) {
-        console.log('WindowManagerWindows: Simple PowerShell failed, trying tasklist...');
-        windows = await this.detectWithTasklist();
-      }
+      // Single, reliable PowerShell detection method
+      const windows = await this.detectWithDirectPowerShell();
       
       if (windows && windows.length > 0) {
-        const dofusWindows = this.processRawWindows(windows);
+        const processedWindows = this.processRawWindows(windows);
         
         // Sort by initiative (descending), then by character name
-        dofusWindows.sort((a, b) => {
+        processedWindows.sort((a, b) => {
           if (b.initiative !== a.initiative) {
             return b.initiative - a.initiative;
           }
           return a.character.localeCompare(b.character);
         });
         
-        return dofusWindows;
+        console.log(`WindowManagerWindows: Successfully detected ${processedWindows.length} windows`);
+        return processedWindows;
       }
       
-      // Si toutes les méthodes ont échoué
-      console.warn('WindowManagerWindows: All detection methods failed, using last known windows');
-      return this.getLastKnownWindows();
+      console.log('WindowManagerWindows: No windows detected');
+      return [];
       
     } catch (error) {
-      console.error('WindowManagerWindows: Critical detection error:', error);
-      return this.getLastKnownWindows();
+      console.error('WindowManagerWindows: Detection failed:', error.message);
+      return [];
     }
   }
 
   /**
-   * MÉTHODE SIMPLIFIÉE: PowerShell simple
+   * SIMPLIFIED: Single PowerShell detection method that works
    */
-  async detectWithSimplePowerShell() {
+  async detectWithDirectPowerShell() {
     try {
-      console.log('WindowManagerWindows: Using Simple PowerShell detection...');
+      // Direct, working PowerShell command
+      const command = [
+        'powershell.exe',
+        '-NoProfile',
+        '-Command',
+        `"Get-Process | Where-Object { $_.MainWindowTitle -match 'dofus|steamer|boulonix|ankama' -and $_.MainWindowHandle -ne 0 } | ForEach-Object { @{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json"`
+      ].join(' ');
       
-      // Commande PowerShell simplifiée
-      const command = 'powershell.exe -Command "Get-Process | Where-Object { $_.MainWindowTitle -match \'dofus|steamer|boulonix|ankama\' -and $_.MainWindowHandle -ne 0 } | Select-Object Id, ProcessName, MainWindowTitle, @{Name=\'Handle\';Expression={$_.MainWindowHandle.ToInt64()}} | ConvertTo-Json"';
-      
-      const { stdout, stderr } = await execAsync(command, { timeout: 3000 });
+      const { stdout, stderr } = await execAsync(command, { 
+        timeout: 2000,
+        encoding: 'utf8'
+      });
       
       if (stderr && stderr.trim()) {
-        console.warn('WindowManagerWindows: Simple PowerShell stderr:', stderr);
+        console.warn('WindowManagerWindows: PowerShell stderr:', stderr.substring(0, 100));
       }
       
-      if (!stdout || !stdout.trim() || stdout.trim() === '[]') {
-        console.log('WindowManagerWindows: Simple PowerShell returned no output');
+      if (!stdout || !stdout.trim() || stdout.trim() === 'null') {
+        console.log('WindowManagerWindows: PowerShell returned no results');
         return [];
       }
       
+      let result;
       try {
-        const result = JSON.parse(stdout.trim());
-        const processes = Array.isArray(result) ? result : [result];
-        
-        const windows = processes
-          .filter(proc => proc.MainWindowTitle && proc.Handle && proc.Handle !== 0)
-          .map(proc => ({
-            Handle: proc.Handle,
-            Title: proc.MainWindowTitle,
-            ProcessId: proc.Id || 0,
-            ClassName: 'Dofus',
-            IsActive: false,
-            Bounds: { X: 0, Y: 0, Width: 800, Height: 600 }
-          }));
-        
-        console.log(`WindowManagerWindows: Simple PowerShell found ${windows.length} Dofus windows with REAL handles`);
-        return windows;
+        result = JSON.parse(stdout.trim());
       } catch (parseError) {
-        console.error('WindowManagerWindows: Simple PowerShell parse error:', parseError);
-        return [];
-      }
-    } catch (error) {
-      console.error('WindowManagerWindows: Simple PowerShell detection failed:', error.message);
-      return [];
-    }
-  }
-
-  /**
-   * MÉTHODE SIMPLIFIÉE: Détection avec Tasklist
-   */
-  async detectWithTasklist() {
-    try {
-      console.log('WindowManagerWindows: Using Tasklist detection...');
-      
-      // Commande tasklist simplifiée
-      const command = 'tasklist /v /fo csv | findstr /i "dofus java steamer boulonix ankama"';
-      
-      const { stdout, stderr } = await execAsync(command, { timeout: 3000 });
-      
-      if (stderr && stderr.trim()) {
-        console.warn('WindowManagerWindows: Tasklist stderr:', stderr);
-      }
-      
-      if (!stdout || !stdout.trim()) {
-        console.log('WindowManagerWindows: Tasklist returned no output');
+        console.error('WindowManagerWindows: JSON parse error:', parseError.message);
         return [];
       }
       
-      const lines = stdout.trim().split('\n');
-      const windows = [];
+      // Ensure we have an array
+      const processes = Array.isArray(result) ? result : [result];
       
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        
-        // Parse CSV line
-        const parts = line.split('","').map(part => part.replace(/"/g, ''));
-        if (parts.length >= 8) {
-          const imageName = parts[0] || '';
-          const pid = parts[1] || '';
-          const windowTitle = parts[8] || '';
-          
-          if (windowTitle && windowTitle !== 'N/A') {
-            // Obtenir le handle via PowerShell
-            try {
-              const handleCommand = `powershell.exe -Command "(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).MainWindowHandle.ToInt64()"`;
-              const { stdout: handleStdout } = await execAsync(handleCommand, { timeout: 1000 });
-              
-              const handle = parseInt(handleStdout.trim());
-              if (handle && handle !== 0) {
-                windows.push({
-                  Handle: handle,
-                  Title: windowTitle,
-                  ProcessId: parseInt(pid) || 0,
-                  ClassName: 'Dofus',
-                  IsActive: false,
-                  Bounds: { X: 0, Y: 0, Width: 800, Height: 600 }
-                });
-              }
-            } catch (handleError) {
-              console.warn(`WindowManagerWindows: Failed to get handle for PID ${pid}:`, handleError.message);
-            }
-          }
-        }
-      }
+      const windows = processes
+        .filter(proc => proc && proc.Title && proc.Handle && proc.Handle !== 0)
+        .map(proc => ({
+          Handle: parseInt(proc.Handle) || 0,
+          Title: proc.Title,
+          ProcessId: parseInt(proc.Id) || 0,
+          ProcessName: proc.ProcessName || 'Unknown',
+          ClassName: 'Dofus',
+          IsActive: false
+        }))
+        .filter(window => window.Handle > 0); // Only valid handles
       
-      console.log(`WindowManagerWindows: Tasklist found ${windows.length} Dofus processes with REAL handles`);
+      console.log(`WindowManagerWindows: Found ${windows.length} valid Dofus windows`);
       return windows;
+      
     } catch (error) {
-      console.error('WindowManagerWindows: Tasklist detection failed:', error.message);
+      console.error('WindowManagerWindows: PowerShell detection failed:', error.message);
       return [];
     }
   }
 
   /**
-   * Retourne les dernières fenêtres connues
+   * SIMPLIFIED: Process raw windows with basic validation
    */
-  getLastKnownWindows() {
-    const lastKnown = Array.from(this.windows.values()).map(w => w.info);
-    
-    if (lastKnown.length > 0) {
-      console.log(`WindowManagerWindows: Returning ${lastKnown.length} last known windows`);
-      return lastKnown;
-    }
-    
-    // CRITIQUE: PAS de fallback simulé - retourner tableau vide si pas de vraies fenêtres
-    console.log('WindowManagerWindows: No real windows found, returning empty array (NO SIMULATION)');
-    return [];
-  }
-
   processRawWindows(rawWindows) {
     const processedWindows = [];
     const currentWindowIds = new Set();
     
     for (const rawWindow of rawWindows) {
-      // CRITIQUE: Vérifier que nous avons un VRAI handle
       if (!rawWindow.Handle || rawWindow.Handle === 0) {
-        console.warn('WindowManagerWindows: Skipping window with no REAL Handle:', rawWindow);
+        console.warn('WindowManagerWindows: Skipping window with invalid handle');
         continue;
       }
-      
-      const windowHandle = rawWindow.Handle.toString();
       
       // Parse character info from title
       const { character, dofusClass } = this.parseWindowTitle(rawWindow.Title);
       
-      // CORRECTION CRITIQUE: Générer l'ID stable de façon cohérente
-      const stableId = this.generateStableWindowId(character, dofusClass, rawWindow.ProcessId || windowHandle);
+      // Generate stable ID
+      const stableId = this.generateStableWindowId(character, dofusClass, rawWindow.ProcessId);
       
-      // CORRECTION MAJEURE: Stocker TOUS les mappings nécessaires
-      this.windowIdMapping.set(stableId, windowHandle);
-      this.realWindowHandles.set(stableId, rawWindow.Handle);
-      
-      // NOUVEAU: Stocker aussi les mappings inverses pour compatibilité
-      this.windowIdMapping.set(`fallback_${character.toLowerCase()}_${dofusClass}`, windowHandle);
-      this.realWindowHandles.set(`fallback_${character.toLowerCase()}_${dofusClass}`, rawWindow.Handle);
-      
+      // Store handle mapping
+      this.handleMapping.set(stableId, rawWindow.Handle);
       currentWindowIds.add(stableId);
       
-      // Get stored class or use detected class
-      const storedClass = this.getStoredClass(stableId);
-      const finalClass = storedClass !== 'feca' ? storedClass : dofusClass;
-      
+      // Get stored data or use defaults
       const windowInfo = {
         id: stableId,
-        handle: windowHandle,
-        realHandle: rawWindow.Handle, // CRITIQUE: Vrai handle Windows
+        handle: rawWindow.Handle.toString(),
+        realHandle: rawWindow.Handle,
         title: rawWindow.Title || 'Unknown Window',
-        processName: this.extractProcessName(rawWindow.ClassName),
+        processName: this.extractProcessName(rawWindow.ProcessName),
         className: rawWindow.ClassName || 'Unknown',
-        pid: (rawWindow.ProcessId || 0).toString(),
+        pid: rawWindow.ProcessId.toString(),
         character: character,
-        dofusClass: finalClass,
+        dofusClass: dofusClass,
         customName: this.getStoredCustomName(stableId),
         initiative: this.getStoredInitiative(stableId),
-        isActive: rawWindow.IsActive || false,
-        bounds: rawWindow.Bounds || { X: 0, Y: 0, Width: 800, Height: 600 },
-        avatar: this.getClassAvatar(finalClass),
+        isActive: false,
+        bounds: { X: 0, Y: 0, Width: 800, Height: 600 },
+        avatar: this.getClassAvatar(dofusClass),
         shortcut: this.getStoredShortcut(stableId),
         enabled: this.getStoredEnabled(stableId)
       };
       
       processedWindows.push(windowInfo);
       this.windows.set(stableId, { info: windowInfo });
-      
-      console.log(`WindowManagerWindows: Processed window ${stableId} with REAL handle ${rawWindow.Handle}`);
-      console.log(`WindowManagerWindows: Mapped ${stableId} -> handle ${rawWindow.Handle}`);
-      console.log(`WindowManagerWindows: Also mapped fallback_${character.toLowerCase()}_${dofusClass} -> handle ${rawWindow.Handle}`);
     }
     
-    // Remove windows that no longer exist
+    // Clean up old windows
     for (const [windowId] of this.windows) {
       if (!currentWindowIds.has(windowId)) {
         this.windows.delete(windowId);
-        this.windowIdMapping.delete(windowId);
-        this.realWindowHandles.delete(windowId);
+        this.handleMapping.delete(windowId);
       }
     }
     
     return processedWindows;
   }
 
+  /**
+   * SIMPLIFIED: Window title parsing
+   */
   parseWindowTitle(title) {
     if (!title) {
       return { character: 'Dofus Player', dofusClass: 'feca' };
     }
 
-    console.log(`WindowManagerWindows: Parsing title: "${title}"`);
-
-    // Expected format: "Nom - Classe - Version - Release"
+    // Expected format: "Character - Class - Version - Release"
     const parts = title.split(' - ').map(part => part.trim());
     
     if (parts.length >= 2) {
       const characterName = parts[0];
       const className = parts[1];
       
-      // Normalize class name
       const normalizedClass = this.normalizeClassName(className);
-      
-      console.log(`WindowManagerWindows: Parsed - Character: "${characterName}", Class: "${className}" -> "${normalizedClass}"`);
       
       return {
         character: characterName || 'Dofus Player',
@@ -434,13 +249,16 @@ try {
       };
     }
     
-    // Fallback
-    const fallbackResult = this.extractCharacterNameFallback(title);
-    console.log(`WindowManagerWindows: Fallback parsing result:`, fallbackResult);
+    // Simple fallback
+    const match = title.match(/^([^-\(]+)/);
+    const character = match ? match[1].trim() : 'Dofus Player';
     
-    return fallbackResult;
+    return { character, dofusClass: 'feca' };
   }
 
+  /**
+   * SIMPLIFIED: Class name normalization
+   */
   normalizeClassName(className) {
     if (!className) return 'feca';
     
@@ -453,422 +271,289 @@ try {
       .replace(/[ç]/g, 'c')
       .trim();
     
-    // Check direct mappings first
-    if (this.classNameMappings[normalized]) {
-      return this.classNameMappings[normalized];
-    }
-    
-    // Check partial matches
-    for (const [key, value] of Object.entries(this.classNameMappings)) {
-      if (normalized.includes(key) || key.includes(normalized)) {
-        return value;
-      }
-    }
-    
-    // Default fallback
-    console.warn(`WindowManagerWindows: Unknown class name: "${className}", using default "feca"`);
-    return 'feca';
-  }
-
-  extractProcessName(className) {
-    if (!className) return 'Dofus';
-    
-    if (className.includes('Unity')) return 'Dofus 3 (Unity)';
-    if (className.includes('Java') || className.includes('SunAwt')) return 'Dofus 2 (Java)';
-    if (className.includes('Retro')) return 'Dofus Retro';
-    
-    return 'Dofus';
-  }
-
-  extractCharacterNameFallback(title) {
-    if (!title) return { character: 'Dofus Player', dofusClass: 'feca' };
-    
-    if (title.trim() === 'Dofus') {
-      return { character: 'Dofus Player', dofusClass: 'feca' };
-    }
-    
-    const patterns = [
-      /^([^-]+)\s*-\s*([^-]+)/i,
-      /dofus\s*-\s*(.+?)(?:\s*\(|$)/i,
-      /(.+?)\s*-\s*dofus/i,
-      /retro\s*-\s*(.+?)(?:\s*\(|$)/i,
-      /(.+?)\s*-\s*retro/i
-    ];
-    
-    for (const pattern of patterns) {
-      const match = title.match(pattern);
-      if (match && match[1]) {
-        let name = match[1].trim();
-        let detectedClass = 'feca';
-        
-        if (match[2]) {
-          detectedClass = this.normalizeClassName(match[2].trim());
-        }
-        
-        name = name.replace(/\s*\(.*\)$/, '');
-        name = name.replace(/\s*-.*$/, '');
-        
-        if (name.length > 0 && name.length < 50 && name !== 'Dofus') {
-          return { character: name, dofusClass: detectedClass };
-        }
-      }
-    }
-    
-    return { character: 'Dofus Player', dofusClass: 'feca' };
+    return this.classNameMappings[normalized] || 'feca';
   }
 
   /**
-   * FIXED: Activation ultra-rapide avec scripts PowerShell corrigés
+   * SIMPLIFIED: Generate stable window ID
+   */
+  generateStableWindowId(character, dofusClass, processId) {
+    const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedClass = dofusClass.toLowerCase();
+    return `${normalizedChar}_${normalizedClass}_${processId}`;
+  }
+
+  extractProcessName(processName) {
+    if (!processName) return 'Dofus';
+    if (processName.includes('java')) return 'Dofus 2 (Java)';
+    return 'Dofus';
+  }
+
+  /**
+   * SIMPLIFIED: Direct window activation with single PowerShell method
    */
   async activateWindow(windowId) {
     try {
-      console.log(`WindowManagerWindows: ULTRA-FAST activation for ${windowId}`);
+      console.log(`WindowManagerWindows: Activating window ${windowId}`);
       
-      // CORRECTION CRITIQUE: Chercher le handle dans tous les mappings possibles
-      let realHandle = this.realWindowHandles.get(windowId);
-      
-      if (!realHandle || realHandle === 0) {
-        console.log(`WindowManagerWindows: No direct handle for ${windowId}, checking alternative mappings...`);
-        
-        // Essayer les mappings alternatifs
-        const alternativeIds = [
-          windowId,
-          windowId.replace('fallback_', ''),
-          `fallback_${windowId}`,
-          windowId.replace(/_\d+$/, '') // Enlever le PID à la fin
-        ];
-        
-        for (const altId of alternativeIds) {
-          realHandle = this.realWindowHandles.get(altId);
-          if (realHandle && realHandle !== 0) {
-            console.log(`WindowManagerWindows: Found handle ${realHandle} using alternative ID ${altId}`);
-            break;
-          }
-        }
-      }
-      
-      if (!realHandle || realHandle === 0) {
-        console.error(`WindowManagerWindows: NO REAL HANDLE found for ${windowId} - CANNOT ACTIVATE`);
+      // Get window handle
+      const handle = this.handleMapping.get(windowId);
+      if (!handle || handle === 0) {
+        console.error(`WindowManagerWindows: No valid handle for ${windowId}`);
         return false;
       }
       
-      console.log(`WindowManagerWindows: Using REAL handle ${realHandle} for ULTRA-FAST activation`);
-      
-      // Cache d'activation ultra-court pour éviter les activations répétées
-      const cacheKey = realHandle.toString();
+      // Check activation cache
+      const cacheKey = handle.toString();
       const now = Date.now();
       
       if (this.activationCache.has(cacheKey)) {
         const lastActivation = this.activationCache.get(cacheKey);
-        if (now - lastActivation < 100) { // 100ms cooldown ultra-court
+        if (now - lastActivation < 500) { // 500ms cooldown
           console.log(`WindowManagerWindows: Recent activation cached for ${windowId}`);
           return true;
         }
       }
       
-      // MÉTHODE 1: Script ultra-rapide CORRIGÉ (priorité absolue)
-      if (this.fastActivationScript && fs.existsSync(this.fastActivationScript)) {
-        try {
-          console.log(`WindowManagerWindows: Using FIXED ULTRA-FAST script for ${windowId}`);
-          
-          const command = `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "${this.fastActivationScript}" -Handle "${realHandle}"`;
-          
-          const { stdout, stderr } = await execAsync(command, { timeout: 500 }); // Timeout réduit
-          
-          if (stderr && stderr.trim()) {
-            console.warn(`WindowManagerWindows: Fast script stderr: ${stderr}`);
-          }
-          
-          const success = stdout.trim() === 'True';
-          
-          if (success) {
-            this.activationCache.set(cacheKey, now);
-            this.updateActiveState(windowId);
-            console.log(`WindowManagerWindows: FIXED ULTRA-FAST script SUCCESS for ${windowId}`);
-            return true;
-          } else {
-            console.warn(`WindowManagerWindows: Fast script returned: ${stdout.trim()}, trying backup...`);
-          }
-        } catch (fastError) {
-          console.warn(`WindowManagerWindows: Fast script error: ${fastError.message}, trying backup...`);
-        }
-      }
+      // Direct PowerShell activation - CORRECTED syntax
+      const command = [
+        'powershell.exe',
+        '-NoProfile',
+        '-Command',
+        `"Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace User32; [User32.Win32]::SetForegroundWindow([IntPtr]${handle})"`
+      ].join(' ');
       
-      // MÉTHODE 2: Script de secours CORRIGÉ (simple et rapide)
-      if (this.activationScriptPath && fs.existsSync(this.activationScriptPath)) {
-        try {
-          console.log(`WindowManagerWindows: Using FIXED backup script for ${windowId}`);
-          
-          const command = `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "${this.activationScriptPath}" -Handle "${realHandle}"`;
-          
-          const { stdout } = await execAsync(command, { timeout: 300 }); // Timeout très court
-          
-          const success = stdout.trim() === 'True';
-          
-          if (success) {
-            this.activationCache.set(cacheKey, now);
-            this.updateActiveState(windowId);
-            console.log(`WindowManagerWindows: FIXED backup script SUCCESS for ${windowId}`);
-            return true;
-          }
-        } catch (backupError) {
-          console.warn(`WindowManagerWindows: Backup script error: ${backupError.message}`);
-        }
-      }
+      const { stdout } = await execAsync(command, { 
+        timeout: 1000,
+        encoding: 'utf8'
+      });
       
-      // MÉTHODE 3: Commande PowerShell inline CORRIGÉE
-      try {
-        console.log(`WindowManagerWindows: Using FIXED inline PowerShell for ${windowId}`);
-        
-        // Commande ultra-simplifiée et corrigée
-        const command = `powershell.exe -Command "Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace User32; [User32.Win32]::SetForegroundWindow([IntPtr]${realHandle})"`;
-        
-        const { stdout } = await execAsync(command, { timeout: 200 }); // Timeout ultra-court
-        
-        const success = stdout.trim() === 'True';
-        
-        if (success) {
-          this.activationCache.set(cacheKey, now);
-          this.updateActiveState(windowId);
-          console.log(`WindowManagerWindows: FIXED inline PowerShell SUCCESS for ${windowId}`);
-          return true;
-        }
-      } catch (inlineError) {
-        console.warn(`WindowManagerWindows: Inline PowerShell error: ${inlineError.message}`);
-      }
+      const success = stdout && stdout.trim() === 'True';
       
-      // MÉTHODE 4: AppActivate de dernier recours (très rapide)
-      try {
-        console.log(`WindowManagerWindows: Using AppActivate for ${windowId}`);
-        
-        const window = this.windows.get(windowId);
-        const pid = window?.info?.pid;
-        
-        if (pid && pid !== '0') {
-          const command = `powershell.exe -Command "$shell = New-Object -ComObject WScript.Shell; $shell.AppActivate(${pid})"`;
-          
-          await execAsync(command, { timeout: 150 }); // Timeout ultra-court
-          
-          this.activationCache.set(cacheKey, now);
-          this.updateActiveState(windowId);
-          console.log(`WindowManagerWindows: AppActivate SUCCESS for ${windowId}`);
-          return true;
-        }
-      } catch (appError) {
-        console.warn(`WindowManagerWindows: AppActivate error: ${appError.message}`);
-      }
-      
-      // Si toutes les méthodes ont échoué
-      console.error(`WindowManagerWindows: ALL FIXED methods failed for ${windowId}`);
-      return false;
-      
-    } catch (error) {
-      console.error('WindowManagerWindows: Critical activation error:', error.message);
-      return false;
-    }
-  }
-
-  updateActiveState(activeWindowId) {
-    // Update the active state of all windows
-    for (const [windowId, windowData] of this.windows) {
-      windowData.info.isActive = windowId === activeWindowId;
-    }
-    
-    console.log(`WindowManagerWindows: Updated active state - ${activeWindowId} is now active`);
-  }
-
-  async moveWindow(windowId, x, y, width = -1, height = -1) {
-    try {
-      // CORRECTION: Chercher le handle dans tous les mappings possibles
-      let realHandle = this.realWindowHandles.get(windowId);
-      
-      if (!realHandle || realHandle === 0) {
-        // Essayer les mappings alternatifs
-        const alternativeIds = [
-          windowId,
-          windowId.replace('fallback_', ''),
-          `fallback_${windowId}`,
-          windowId.replace(/_\d+$/, '') // Enlever le PID à la fin
-        ];
-        
-        for (const altId of alternativeIds) {
-          realHandle = this.realWindowHandles.get(altId);
-          if (realHandle && realHandle !== 0) {
-            console.log(`WindowManagerWindows: Found handle ${realHandle} for move using alternative ID ${altId}`);
-            break;
-          }
-        }
-      }
-      
-      if (!realHandle || realHandle === 0) {
-        console.log(`WindowManagerWindows: No REAL handle found for move operation: ${windowId}`);
+      if (success) {
+        this.activationCache.set(cacheKey, now);
+        this.updateActiveState(windowId);
+        console.log(`WindowManagerWindows: Successfully activated ${windowId}`);
+        return true;
+      } else {
+        console.warn(`WindowManagerWindows: Activation failed for ${windowId} - output: ${stdout}`);
         return false;
       }
       
-      const command = `powershell.exe -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32Move { [DllImport(\\"user32.dll\\")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags); }'; [Win32Move]::SetWindowPos([IntPtr]${realHandle}, [IntPtr]0, ${x}, ${y}, ${width}, ${height}, 0x0040)"`;
-      
-      const { stdout } = await execAsync(command, { timeout: 100 });
-      return stdout.trim() === 'True';
     } catch (error) {
-      console.warn('WindowManagerWindows: Move operation failed:', error.message);
+      console.error(`WindowManagerWindows: Activation error for ${windowId}:`, error.message);
       return false;
     }
   }
 
+  /**
+   * Updates active state of windows
+   */
+  updateActiveState(activeWindowId) {
+    for (const [windowId, windowData] of this.windows) {
+      if (windowData && windowData.info) {
+        windowData.info.isActive = windowId === activeWindowId;
+      }
+    }
+  }
+
+  /**
+   * SIMPLIFIED: Window organization
+   */
   async organizeWindows(layout = 'grid') {
     const enabledWindows = Array.from(this.windows.values())
       .filter(w => w.info.enabled)
       .sort((a, b) => b.info.initiative - a.info.initiative);
     
-    if (enabledWindows.length === 0) return false;
+    if (enabledWindows.length === 0) {
+      console.log('WindowManagerWindows: No enabled windows to organize');
+      return false;
+    }
 
     try {
       console.log(`WindowManagerWindows: Organizing ${enabledWindows.length} windows in ${layout} layout`);
       
+      // Simple screen dimensions
       const screenWidth = 1920;
       const screenHeight = 1080;
       
       switch (layout) {
         case 'grid':
-          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
+          await this.arrangeInGrid(enabledWindows, screenWidth, screenHeight);
           break;
         case 'horizontal':
-          await this.arrangeHorizontally(enabledWindows, 0, 0, screenWidth, screenHeight);
+          await this.arrangeHorizontally(enabledWindows, screenWidth, screenHeight);
           break;
         case 'vertical':
-          await this.arrangeVertically(enabledWindows, 0, 0, screenWidth, screenHeight);
+          await this.arrangeVertically(enabledWindows, screenWidth, screenHeight);
           break;
         default:
-          await this.arrangeInGrid(enabledWindows, 0, 0, screenWidth, screenHeight);
+          await this.arrangeInGrid(enabledWindows, screenWidth, screenHeight);
       }
       
       return true;
     } catch (error) {
-      console.error('WindowManagerWindows: Organization error:', error.message);
+      console.error('WindowManagerWindows: Organization failed:', error.message);
       return false;
     }
   }
 
-  async arrangeInGrid(windows, startX, startY, totalWidth, totalHeight) {
+  async arrangeInGrid(windows, screenWidth, screenHeight) {
     const count = windows.length;
     const cols = Math.ceil(Math.sqrt(count));
     const rows = Math.ceil(count / cols);
     
-    const windowWidth = Math.floor(totalWidth / cols);
-    const windowHeight = Math.floor(totalHeight / rows);
+    const windowWidth = Math.floor(screenWidth / cols);
+    const windowHeight = Math.floor(screenHeight / rows);
     
     for (let i = 0; i < windows.length; i++) {
       const windowData = windows[i];
       const col = i % cols;
       const row = Math.floor(i / cols);
       
-      const x = startX + col * windowWidth;
-      const y = startY + row * windowHeight;
+      const x = col * windowWidth;
+      const y = row * windowHeight;
       
       await this.moveWindow(windowData.info.id, x, y, windowWidth - 10, windowHeight - 50);
     }
   }
 
-  async arrangeHorizontally(windows, startX, startY, totalWidth, totalHeight) {
-    const windowWidth = Math.floor(totalWidth / windows.length);
+  async arrangeHorizontally(windows, screenWidth, screenHeight) {
+    const windowWidth = Math.floor(screenWidth / windows.length);
     
     for (let i = 0; i < windows.length; i++) {
       const windowData = windows[i];
-      const x = startX + i * windowWidth;
-      await this.moveWindow(windowData.info.id, x, startY, windowWidth - 10, totalHeight - 50);
+      const x = i * windowWidth;
+      await this.moveWindow(windowData.info.id, x, 0, windowWidth - 10, screenHeight - 50);
     }
   }
 
-  async arrangeVertically(windows, startX, startY, totalWidth, totalHeight) {
-    const windowHeight = Math.floor(totalHeight / windows.length);
+  async arrangeVertically(windows, screenWidth, screenHeight) {
+    const windowHeight = Math.floor(screenHeight / windows.length);
     
     for (let i = 0; i < windows.length; i++) {
       const windowData = windows[i];
-      const y = startY + i * windowHeight;
-      await this.moveWindow(windowData.info.id, startX, y, totalWidth - 10, windowHeight - 10);
+      const y = i * windowHeight;
+      await this.moveWindow(windowData.info.id, 0, y, screenWidth - 10, windowHeight - 10);
+    }
+  }
+
+  /**
+   * SIMPLIFIED: Window movement
+   */
+  async moveWindow(windowId, x, y, width = -1, height = -1) {
+    try {
+      const handle = this.handleMapping.get(windowId);
+      if (!handle || handle === 0) {
+        console.warn(`WindowManagerWindows: No handle for window ${windowId}`);
+        return false;
+      }
+      
+      const command = [
+        'powershell.exe',
+        '-NoProfile',
+        '-Command',
+        `"Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);' -Name Win32Move -Namespace User32; [User32.Win32Move]::SetWindowPos([IntPtr]${handle}, [IntPtr]0, ${x}, ${y}, ${width}, ${height}, 0x0040)"`
+      ].join(' ');
+      
+      const { stdout } = await execAsync(command, { timeout: 500 });
+      return stdout && stdout.trim() === 'True';
+    } catch (error) {
+      console.warn('WindowManagerWindows: Move operation failed:', error.message);
+      return false;
     }
   }
 
   // Class management methods
   setWindowClass(windowId, classKey) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const classes = store.get('classes', {});
-    classes[windowId] = classKey;
-    store.set('classes', classes);
-    
-    if (this.windows.has(windowId)) {
-      const windowData = this.windows.get(windowId);
-      windowData.info.dofusClass = classKey;
-      windowData.info.avatar = this.getClassAvatar(classKey);
-      this.windows.set(windowId, windowData);
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const classes = store.get('classes', {});
+      classes[windowId] = classKey;
+      store.set('classes', classes);
+      
+      if (this.windows.has(windowId)) {
+        const windowData = this.windows.get(windowId);
+        windowData.info.dofusClass = classKey;
+        windowData.info.avatar = this.getClassAvatar(classKey);
+        this.windows.set(windowId, windowData);
+      }
+      return true;
+    } catch (error) {
+      console.error('WindowManagerWindows: Error setting window class:', error);
+      return false;
     }
   }
 
-  getNextClass(currentClass) {
-    const classKeys = Object.keys(this.dofusClasses);
-    const currentIndex = classKeys.indexOf(currentClass);
-    const nextIndex = (currentIndex + 1) % classKeys.length;
-    return classKeys[nextIndex];
-  }
-
-  // Storage methods
+  // Storage methods with error handling
   getStoredCustomName(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const customNames = store.get('customNames', {});
-    return customNames[windowId] || null;
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const customNames = store.get('customNames', {});
+      return customNames[windowId] || null;
+    } catch (error) {
+      return null;
+    }
   }
 
   getStoredInitiative(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const initiatives = store.get('initiatives', {});
-    return initiatives[windowId] || 0;
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const initiatives = store.get('initiatives', {});
+      return initiatives[windowId] || 0;
+    } catch (error) {
+      return 0;
+    }
   }
 
   getStoredClass(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const classes = store.get('classes', {});
-    return classes[windowId] || 'feca';
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const classes = store.get('classes', {});
+      return classes[windowId] || 'feca';
+    } catch (error) {
+      return 'feca';
+    }
   }
 
   getStoredShortcut(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const shortcuts = store.get('shortcuts', {});
-    return shortcuts[windowId] || null;
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const shortcuts = store.get('shortcuts', {});
+      return shortcuts[windowId] || null;
+    } catch (error) {
+      return null;
+    }
   }
 
   getStoredEnabled(windowId) {
-    const Store = require('electron-store');
-    const store = new Store();
-    const enabled = store.get('enabled', {});
-    return enabled[windowId] !== false;
+    try {
+      const Store = require('electron-store');
+      const store = new Store();
+      const enabled = store.get('enabled', {});
+      return enabled[windowId] !== false;
+    } catch (error) {
+      return true;
+    }
   }
 
+  /**
+   * SIMPLIFIED: Cleanup
+   */
   cleanup() {
-    // Clear activation cache
-    this.activationCache.clear();
-    this.windowIdMapping.clear();
-    this.realWindowHandles.clear();
-    
-    // Supprimer les scripts d'activation
-    const scriptsToRemove = [this.activationScriptPath, this.fastActivationScript];
-    
-    scriptsToRemove.forEach(scriptPath => {
-      if (scriptPath && fs.existsSync(scriptPath)) {
-        try {
-          fs.unlinkSync(scriptPath);
-          console.log(`WindowManagerWindows: Removed script: ${scriptPath}`);
-        } catch (error) {
-          console.warn(`WindowManagerWindows: Failed to remove script: ${error.message}`);
-        }
-      }
-    });
-    
-    console.log('WindowManagerWindows: ULTRA-FAST activation system cleaned up');
+    try {
+      this.activationCache.clear();
+      this.handleMapping.clear();
+      this.windows.clear();
+      console.log('WindowManagerWindows: Cleanup completed');
+    } catch (error) {
+      console.error('WindowManagerWindows: Cleanup error:', error);
+    }
   }
 }
 
