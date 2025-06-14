@@ -3,8 +3,8 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 /**
- * WindowManagerWindows v2.2 - FIXED: Corrected PowerShell scripts with proper syntax and validation
- * CRITICAL FIXES: Fixed all PowerShell syntax errors and added robust error handling
+ * WindowManagerWindows v2.3 - FIXED: Corrected detection patterns for Dofus windows
+ * CRITICAL FIXES: Updated to detect UnityWndClass and proper executable patterns
  */
 class WindowManagerWindows {
   constructor() {
@@ -55,7 +55,7 @@ class WindowManagerWindows {
       'eliotrop': 'eliotrope', 'elio': 'eliotrope', 'hupper': 'huppermage', 'ougi': 'ouginak'
     };
     
-    console.log('WindowManagerWindows: Initialized with CORRECTED PowerShell scripts');
+    console.log('WindowManagerWindows: Initialized with CORRECTED Dofus detection patterns');
   }
 
   getDofusClasses() {
@@ -89,10 +89,10 @@ class WindowManagerWindows {
       }
       this.lastWindowCheck = now;
 
-      console.log('WindowManagerWindows: Starting optimized PowerShell detection...');
+      console.log('WindowManagerWindows: Starting optimized Dofus detection...');
       
-      // Fast, reliable PowerShell detection
-      const windows = await this.detectWithOptimizedPowerShell();
+      // FIXED: Use proper Dofus detection patterns
+      const windows = await this.detectDofusWithCorrectPatterns();
       
       if (windows && windows.length > 0) {
         const processedWindows = this.processRawWindows(windows);
@@ -108,11 +108,11 @@ class WindowManagerWindows {
         const duration = Date.now() - startTime;
         this.updateDetectionStats(duration);
         
-        console.log(`WindowManagerWindows: Successfully detected ${processedWindows.length} windows in ${duration}ms`);
+        console.log(`WindowManagerWindows: Successfully detected ${processedWindows.length} Dofus windows in ${duration}ms`);
         return processedWindows;
       }
       
-      console.log('WindowManagerWindows: No windows detected');
+      console.log('WindowManagerWindows: No Dofus windows detected');
       return [];
       
     } catch (error) {
@@ -123,52 +123,199 @@ class WindowManagerWindows {
   }
 
   /**
-   * FIXED: Corrected PowerShell detection with proper syntax and error handling
+   * FIXED: Proper Dofus detection using correct patterns and multiple methods
    */
-  async detectWithOptimizedPowerShell() {
+  async detectDofusWithCorrectPatterns() {
     try {
-      // CORRECTED: Proper PowerShell command with fixed escaping and validation
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Get-Process | Where-Object { $_.MainWindowTitle -match 'dofus|steamer|boulonix|ankama' -and $_.MainWindowHandle -ne 0 } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress } catch { Write-Error $_.Exception.Message; exit 1 }"`;
+      console.log('WindowManagerWindows: Trying multiple detection methods...');
+      
+      // Method 1: Detect by executable name pattern (most reliable)
+      let windows = await this.detectByExecutableName();
+      
+      if (windows.length === 0) {
+        // Method 2: Detect by window class (UnityWndClass for Dofus 3)
+        windows = await this.detectByWindowClass();
+      }
+      
+      if (windows.length === 0) {
+        // Method 3: Detect by process name
+        windows = await this.detectByProcessName();
+      }
+      
+      if (windows.length === 0) {
+        // Method 4: Fallback - detect any window with Dofus-like title
+        windows = await this.detectByWindowTitle();
+      }
+      
+      console.log(`WindowManagerWindows: Found ${windows.length} potential Dofus windows`);
+      return windows;
+      
+    } catch (error) {
+      console.error('WindowManagerWindows: All detection methods failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * NEW: Detect by executable name pattern (^(?i)dofus[^\.]*\.exe$)
+   */
+  async detectByExecutableName() {
+    try {
+      console.log('WindowManagerWindows: Detecting by executable name pattern...');
+      
+      // CORRECTED: PowerShell command to find processes with Dofus executable pattern
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Get-Process | Where-Object { $_.ProcessName -match '^dofus' -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64(); Path = try { $_.Path } catch { 'Unknown' } } } | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
       
       const { stdout, stderr } = await execAsync(command, { 
-        timeout: 1500, // Reduced timeout for faster response
+        timeout: 2000,
         encoding: 'utf8',
         windowsHide: true
       });
       
       if (stderr && stderr.trim()) {
-        console.warn('WindowManagerWindows: PowerShell stderr:', stderr.substring(0, 100));
+        console.warn('WindowManagerWindows: Executable detection stderr:', stderr.substring(0, 100));
+      }
+      
+      if (!stdout || !stdout.trim() || stdout.trim() === '[]') {
+        console.log('WindowManagerWindows: No processes found by executable name');
         return [];
       }
       
-      if (!stdout || !stdout.trim() || stdout.trim() === 'null') {
-        console.log('WindowManagerWindows: PowerShell returned no results');
-        return [];
-      }
-      
-      let result;
-      try {
-        result = JSON.parse(stdout.trim());
-      } catch (parseError) {
-        console.error('WindowManagerWindows: JSON parse error:', parseError.message);
-        return [];
-      }
-      
-      // Ensure we have an array
+      const result = JSON.parse(stdout.trim());
       const processes = Array.isArray(result) ? result : [result];
       
-      // IMPROVED: Better validation and filtering
       const windows = processes
         .filter(proc => this.validateProcessData(proc))
-        .map(proc => this.normalizeProcessData(proc))
-        .filter(window => window.Handle > 0 && window.Title);
+        .map(proc => this.normalizeProcessData(proc));
       
-      console.log(`WindowManagerWindows: Found ${windows.length} valid Dofus windows`);
+      console.log(`WindowManagerWindows: Found ${windows.length} windows by executable name`);
       return windows;
       
     } catch (error) {
-      console.error('WindowManagerWindows: PowerShell detection failed:', error.message);
-      this.performanceStats.errors++;
+      console.warn('WindowManagerWindows: Executable name detection failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * NEW: Detect by window class (UnityWndClass)
+   */
+  async detectByWindowClass() {
+    try {
+      console.log('WindowManagerWindows: Detecting by window class (UnityWndClass)...');
+      
+      // PowerShell command to find windows with UnityWndClass
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public class Win32Class { [DllImport(\\"user32.dll\\", SetLastError = true, CharSet = CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); [DllImport(\\"user32.dll\\")] public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam); [DllImport(\\"user32.dll\\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId); [DllImport(\\"user32.dll\\")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount); public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam); }'; $windows = @(); [Win32Class]::EnumWindows({ param($hwnd, $lParam) $className = New-Object System.Text.StringBuilder 256; [Win32Class]::GetClassName($hwnd, $className, $className.Capacity); if ($className.ToString() -eq 'UnityWndClass') { $title = New-Object System.Text.StringBuilder 256; [Win32Class]::GetWindowText($hwnd, $title, $title.Capacity); $processId = 0; [Win32Class]::GetWindowThreadProcessId($hwnd, [ref]$processId); if ($title.Length -gt 0 -and $processId -gt 0) { try { $process = Get-Process -Id $processId -ErrorAction Stop; $script:windows += [PSCustomObject]@{ Id = $processId; ProcessName = $process.ProcessName; Title = $title.ToString(); Handle = $hwnd.ToInt64(); ClassName = $className.ToString() } } catch {} } } return $true }, [IntPtr]::Zero); $windows | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
+      
+      const { stdout, stderr } = await execAsync(command, { 
+        timeout: 3000,
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      
+      if (stderr && stderr.trim()) {
+        console.warn('WindowManagerWindows: Window class detection stderr:', stderr.substring(0, 100));
+      }
+      
+      if (!stdout || !stdout.trim() || stdout.trim() === '[]') {
+        console.log('WindowManagerWindows: No UnityWndClass windows found');
+        return [];
+      }
+      
+      const result = JSON.parse(stdout.trim());
+      const processes = Array.isArray(result) ? result : [result];
+      
+      const windows = processes
+        .filter(proc => this.validateProcessData(proc))
+        .map(proc => this.normalizeProcessData(proc));
+      
+      console.log(`WindowManagerWindows: Found ${windows.length} UnityWndClass windows`);
+      return windows;
+      
+    } catch (error) {
+      console.warn('WindowManagerWindows: Window class detection failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * NEW: Detect by process name
+   */
+  async detectByProcessName() {
+    try {
+      console.log('WindowManagerWindows: Detecting by process name...');
+      
+      // Look for common Dofus process names
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Get-Process | Where-Object { ($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*' -or $_.ProcessName -like '*ankama*') -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
+      
+      const { stdout, stderr } = await execAsync(command, { 
+        timeout: 2000,
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      
+      if (stderr && stderr.trim()) {
+        console.warn('WindowManagerWindows: Process name detection stderr:', stderr.substring(0, 100));
+      }
+      
+      if (!stdout || !stdout.trim() || stdout.trim() === '[]') {
+        console.log('WindowManagerWindows: No processes found by name');
+        return [];
+      }
+      
+      const result = JSON.parse(stdout.trim());
+      const processes = Array.isArray(result) ? result : [result];
+      
+      const windows = processes
+        .filter(proc => this.validateProcessData(proc))
+        .map(proc => this.normalizeProcessData(proc));
+      
+      console.log(`WindowManagerWindows: Found ${windows.length} windows by process name`);
+      return windows;
+      
+    } catch (error) {
+      console.warn('WindowManagerWindows: Process name detection failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * NEW: Fallback detection by window title
+   */
+  async detectByWindowTitle() {
+    try {
+      console.log('WindowManagerWindows: Fallback detection by window title...');
+      
+      // Look for windows with Dofus-like titles
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Get-Process | Where-Object { $_.MainWindowTitle -match '(dofus|steamer|boulonix|ankama)' -and $_.MainWindowHandle -ne 0 } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress } catch { Write-Output '[]' }"`;
+      
+      const { stdout, stderr } = await execAsync(command, { 
+        timeout: 2000,
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      
+      if (stderr && stderr.trim()) {
+        console.warn('WindowManagerWindows: Title detection stderr:', stderr.substring(0, 100));
+      }
+      
+      if (!stdout || !stdout.trim() || stdout.trim() === '[]') {
+        console.log('WindowManagerWindows: No windows found by title');
+        return [];
+      }
+      
+      const result = JSON.parse(stdout.trim());
+      const processes = Array.isArray(result) ? result : [result];
+      
+      const windows = processes
+        .filter(proc => this.validateProcessData(proc))
+        .map(proc => this.normalizeProcessData(proc));
+      
+      console.log(`WindowManagerWindows: Found ${windows.length} windows by title`);
+      return windows;
+      
+    } catch (error) {
+      console.warn('WindowManagerWindows: Title detection failed:', error.message);
       return [];
     }
   }
@@ -194,7 +341,7 @@ class WindowManagerWindows {
       Title: proc.Title.toString().trim(),
       ProcessId: parseInt(proc.Id) || 0,
       ProcessName: proc.ProcessName.toString().trim(),
-      ClassName: 'Dofus',
+      ClassName: proc.ClassName || 'Unknown',
       IsActive: false
     };
   }
@@ -353,7 +500,8 @@ class WindowManagerWindows {
     if (!processName) return 'Dofus';
     if (processName.includes('java')) return 'Dofus 2 (Java)';
     if (processName.includes('unity')) return 'Dofus 3 (Unity)';
-    return 'Dofus';
+    if (processName.toLowerCase().includes('dofus')) return 'Dofus';
+    return processName;
   }
 
   /**
