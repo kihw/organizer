@@ -102,7 +102,7 @@ class ShortcutManager {
       if (modifierMappings[part]) {
         processedParts.push(modifierMappings[part]);
       } else {
-        // Handle special keys
+        // Handle special keys and single keys
         const keyMappings = {
           'space': 'Space',
           'enter': 'Return',
@@ -137,7 +137,18 @@ class ShortcutManager {
           'numsub': 'numsub',
           'nummult': 'nummult',
           'numdiv': 'numdiv',
-          'numdec': 'numdec'
+          'numdec': 'numdec',
+          // Special characters
+          'semicolon': ';',
+          'equal': '=',
+          'comma': ',',
+          'period': '.',
+          'slash': '/',
+          'backslash': '\\',
+          'quote': "'",
+          'backquote': '`',
+          'bracketleft': '[',
+          'bracketright': ']'
         };
         
         const mappedKey = keyMappings[part] || part.toUpperCase();
@@ -154,8 +165,8 @@ class ShortcutManager {
     try {
       const accelerator = this.convertShortcutToAccelerator(shortcut);
       
-      // Check if it's a valid accelerator format
-      const validPattern = /^(CommandOrControl|Alt|Shift|Super)(\+(CommandOrControl|Alt|Shift|Super))*\+[A-Z0-9]$|^[A-Z0-9]$|^F[1-9]|F1[0-2]$/;
+      // Allow single keys and combinations
+      const validPattern = /^(CommandOrControl|Alt|Shift|Super)(\+(CommandOrControl|Alt|Shift|Super))*\+[A-Z0-9;=,.\/'`\[\]\\-]$|^[A-Z0-9;=,.\/'`\[\]\\-]$|^F[1-9]|F1[0-2]$|^num[0-9]$|^Space$|^Return$|^Backspace$|^Tab$|^Escape$/;
       
       return accelerator.length > 0 && !this.registeredAccelerators.has(accelerator);
     } catch (error) {
