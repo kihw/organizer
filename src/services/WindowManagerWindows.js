@@ -3,8 +3,7 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 /**
- * WindowManagerWindows v3.1 - FIXED PARSING: Correct PowerShell result parsing
- * CRITICAL FIX: Parse "True"/"False" correctly and remove false error messages
+ * WindowManagerWindows v3.2 - Optimisé pour performance maximale
  */
 class WindowManagerWindows {
   constructor() {
@@ -20,7 +19,7 @@ class WindowManagerWindows {
       errors: 0
     };
     
-    // Define available classes and their corresponding avatars
+    // Classes Dofus disponibles avec avatars
     this.dofusClasses = {
       'feca': { name: 'Feca', avatar: '1' },
       'osamodas': { name: 'Osamodas', avatar: '2' },
@@ -43,7 +42,7 @@ class WindowManagerWindows {
       'forgelance': { name: 'Forgelance', avatar: '20' }
     };
     
-    // Class name mappings for French/English detection
+    // Mappings de noms de classes
     this.classNameMappings = {
       'feca': 'feca', 'féca': 'feca', 'osamodas': 'osamodas', 'enutrof': 'enutrof',
       'sram': 'sram', 'xelor': 'xelor', 'xélor': 'xelor', 'ecaflip': 'ecaflip',
@@ -55,7 +54,7 @@ class WindowManagerWindows {
       'eliotrop': 'eliotrope', 'elio': 'eliotrope', 'hupper': 'huppermage', 'ougi': 'ouginak'
     };
 
-    // CRITICAL: Exclude our own application windows
+    // Titres exclus
     this.excludedTitles = [
       'dofus organizer',
       'organizer',
@@ -65,7 +64,7 @@ class WindowManagerWindows {
       'launcher'
     ];
     
-    console.log('WindowManagerWindows: Initialized with FIXED PowerShell result parsing');
+    console.log('WindowManagerWindows: Initialized with optimized performance');
   }
 
   getDofusClasses() {
@@ -82,13 +81,13 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Fast window detection - KEEP THIS
+   * Détection rapide des fenêtres Dofus
    */
   async getDofusWindows() {
     const startTime = Date.now();
     
     try {
-      // Efficient time-based cache
+      // Cache basé sur le temps
       const now = Date.now();
       if (now - this.lastWindowCheck < 3000) {
         const cachedWindows = Array.from(this.windows.values()).map(w => w.info);
@@ -99,15 +98,14 @@ class WindowManagerWindows {
       }
       this.lastWindowCheck = now;
 
-      console.log('WindowManagerWindows: Starting SIMPLIFIED detection...');
+      console.log('WindowManagerWindows: Starting detection...');
       
-      // SIMPLIFIED: Use only working detection methods
       const windows = await this.detectDofusSimplified();
       
       if (windows && windows.length > 0) {
         const processedWindows = this.processRawWindows(windows);
         
-        // Sort by initiative (descending), then by character name
+        // Tri par initiative (descendant), puis par nom de personnage
         processedWindows.sort((a, b) => {
           if (b.initiative !== a.initiative) {
             return b.initiative - a.initiative;
@@ -118,7 +116,7 @@ class WindowManagerWindows {
         const duration = Date.now() - startTime;
         this.updateDetectionStats(duration);
         
-        console.log(`WindowManagerWindows: SIMPLIFIED - Successfully detected ${processedWindows.length} valid Dofus windows in ${duration}ms`);
+        console.log(`WindowManagerWindows: Successfully detected ${processedWindows.length} valid Dofus windows in ${duration}ms`);
         return processedWindows;
       }
       
@@ -133,16 +131,15 @@ class WindowManagerWindows {
   }
 
   /**
-   * SIMPLIFIED: Only use working detection methods
+   * Détection simplifiée
    */
   async detectDofusSimplified() {
     try {
-      console.log('WindowManagerWindows: Using SIMPLIFIED detection methods...');
+      console.log('WindowManagerWindows: Using simplified detection...');
       
       let allWindows = [];
       
-      // Method 1: Process name detection (WORKING)
-      console.log('WindowManagerWindows: Method 1 - Process name detection...');
+      // Méthode 1: Détection par nom de processus
       try {
         const processWindows = await this.detectByProcessNameSimple();
         allWindows = allWindows.concat(processWindows);
@@ -151,8 +148,7 @@ class WindowManagerWindows {
         console.warn('WindowManagerWindows: Process name detection failed:', error.message);
       }
       
-      // Method 2: Title detection (WORKING)
-      console.log('WindowManagerWindows: Method 2 - Window title detection...');
+      // Méthode 2: Détection par titre de fenêtre
       try {
         const titleWindows = await this.detectByWindowTitleSimple();
         allWindows = allWindows.concat(titleWindows);
@@ -161,7 +157,7 @@ class WindowManagerWindows {
         console.warn('WindowManagerWindows: Title detection failed:', error.message);
       }
       
-      // Remove duplicates and filter game windows
+      // Supprimer les doublons et filtrer les fenêtres de jeu
       const uniqueWindows = this.removeDuplicateWindows(allWindows);
       const gameWindows = this.filterGameWindowsOnly(uniqueWindows);
       
@@ -175,7 +171,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * SIMPLIFIED: Process name detection - WORKING
+   * Détection par nom de processus
    */
   async detectByProcessNameSimple() {
     try {
@@ -205,7 +201,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * SIMPLIFIED: Title detection - WORKING
+   * Détection par titre de fenêtre
    */
   async detectByWindowTitleSimple() {
     try {
@@ -235,7 +231,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Filter to keep only actual Dofus GAME windows
+   * Filtrage des fenêtres de jeu uniquement
    */
   filterGameWindowsOnly(windows) {
     const gameWindows = [];
@@ -253,7 +249,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Check if window is a valid Dofus GAME window
+   * Vérification de fenêtre de jeu Dofus valide
    */
   isValidDofusGameWindow(title) {
     if (!title || title.trim().length === 0) {
@@ -262,7 +258,7 @@ class WindowManagerWindows {
     
     const lowerTitle = title.toLowerCase();
     
-    // Exclude our own application and launchers
+    // Exclure notre application et les lanceurs
     for (const excluded of this.excludedTitles) {
       if (lowerTitle.includes(excluded)) {
         console.log(`WindowManagerWindows: Title "${title}" excluded - matches "${excluded}"`);
@@ -270,14 +266,14 @@ class WindowManagerWindows {
       }
     }
     
-    // Must contain a valid Dofus class name in the title
+    // Doit contenir un nom de classe Dofus valide
     const hasValidClass = this.containsValidDofusClass(title);
     if (!hasValidClass) {
       console.log(`WindowManagerWindows: Title "${title}" rejected - no valid Dofus class found`);
       return false;
     }
     
-    // Must follow character-class pattern
+    // Doit suivre le pattern personnage-classe
     const hasCharacterPattern = this.hasValidCharacterPattern(title);
     if (!hasCharacterPattern) {
       console.log(`WindowManagerWindows: Title "${title}" rejected - no valid character pattern`);
@@ -288,7 +284,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Check for valid character-class pattern
+   * Vérification du pattern personnage-classe valide
    */
   hasValidCharacterPattern(title) {
     const patterns = [
@@ -301,7 +297,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Remove duplicate windows based on handle
+   * Suppression des fenêtres dupliquées
    */
   removeDuplicateWindows(windows) {
     const seen = new Set();
@@ -318,14 +314,14 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Check if title contains a valid Dofus class name
+   * Vérification de nom de classe Dofus valide
    */
   containsValidDofusClass(title) {
     if (!title) return false;
     
     const lowerTitle = title.toLowerCase();
     
-    // Check for exact class matches in the title
+    // Vérifier les correspondances exactes de classes
     for (const className of Object.keys(this.dofusClasses)) {
       if (lowerTitle.includes(className.toLowerCase())) {
         console.log(`WindowManagerWindows: Found valid class "${className}" in title "${title}"`);
@@ -333,7 +329,7 @@ class WindowManagerWindows {
       }
     }
     
-    // Check for class name mappings
+    // Vérifier les mappings de noms de classes
     for (const [mapping, className] of Object.entries(this.classNameMappings)) {
       if (lowerTitle.includes(mapping.toLowerCase())) {
         console.log(`WindowManagerWindows: Found valid class mapping "${mapping}" -> "${className}" in title "${title}"`);
@@ -345,7 +341,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Validates process data before processing
+   * Validation des données de processus
    */
   validateProcessData(proc) {
     return proc && 
@@ -357,7 +353,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Normalizes process data with proper type conversion
+   * Normalisation des données de processus
    */
   normalizeProcessData(proc) {
     return {
@@ -371,7 +367,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Process raw windows with improved validation
+   * Traitement des fenêtres brutes
    */
   processRawWindows(rawWindows) {
     const processedWindows = [];
@@ -382,17 +378,17 @@ class WindowManagerWindows {
         continue;
       }
       
-      // Parse character info from title
+      // Parser les infos de personnage depuis le titre
       const { character, dofusClass } = this.parseWindowTitle(rawWindow.Title);
       
-      // Generate stable ID
+      // Générer un ID stable
       const stableId = this.generateStableWindowId(character, dofusClass, rawWindow.ProcessId);
       
-      // Store handle mapping for activation
+      // Stocker le mapping de handle pour l'activation
       this.handleMapping.set(stableId, rawWindow.Handle);
       currentWindowIds.add(stableId);
       
-      // Build window info with defaults
+      // Construire les infos de fenêtre avec valeurs par défaut
       const windowInfo = {
         id: stableId,
         handle: rawWindow.Handle.toString(),
@@ -416,14 +412,14 @@ class WindowManagerWindows {
       this.windows.set(stableId, { info: windowInfo });
     }
     
-    // Clean up old windows
+    // Nettoyer les anciennes fenêtres
     this.cleanupOldWindows(currentWindowIds);
     
     return processedWindows;
   }
 
   /**
-   * WORKING: Validates raw window data
+   * Validation des données de fenêtre brute
    */
   validateRawWindow(rawWindow) {
     if (!rawWindow.Handle || rawWindow.Handle === 0) {
@@ -440,7 +436,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Efficient cleanup of old windows
+   * Nettoyage efficace des anciennes fenêtres
    */
   cleanupOldWindows(currentWindowIds) {
     const keysToDelete = [];
@@ -462,14 +458,14 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Window title parsing with better regex
+   * Parsing du titre de fenêtre
    */
   parseWindowTitle(title) {
     if (!title) {
       return { character: 'Dofus Player', dofusClass: 'feca' };
     }
 
-    // Expected format: "Character - Class - Version - Release"
+    // Format attendu: "Character - Class - Version - Release"
     const parts = title.split(' - ').map(part => part.trim());
     
     if (parts.length >= 2) {
@@ -484,7 +480,7 @@ class WindowManagerWindows {
       };
     }
     
-    // Improved fallback with better regex
+    // Fallback amélioré avec regex
     const match = title.match(/^([^-\(\[\{]+)/);
     const character = match ? match[1].trim() : 'Dofus Player';
     
@@ -492,7 +488,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Class name normalization with improved mapping
+   * Normalisation du nom de classe
    */
   normalizeClassName(className) {
     if (!className) return 'feca';
@@ -504,19 +500,19 @@ class WindowManagerWindows {
       .replace(/[òóôõö]/g, 'o')
       .replace(/[ùúûü]/g, 'u')
       .replace(/[ç]/g, 'c')
-      .replace(/[^a-z]/g, '') // Remove all non-letter characters
+      .replace(/[^a-z]/g, '') // Supprimer tous les caractères non-lettres
       .trim();
     
     return this.classNameMappings[normalized] || 'feca';
   }
 
   /**
-   * WORKING: Generate stable window ID with better normalization
+   * Génération d'ID de fenêtre stable
    */
   generateStableWindowId(character, dofusClass, processId) {
     const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
     const normalizedClass = dofusClass.toLowerCase();
-    const safePid = parseInt(processId) || Date.now(); // Fallback to timestamp if PID invalid
+    const safePid = parseInt(processId) || Date.now(); // Fallback vers timestamp si PID invalide
     return `${normalizedChar}_${normalizedClass}_${safePid}`;
   }
 
@@ -529,22 +525,22 @@ class WindowManagerWindows {
   }
 
   /**
-   * FIXED ACTIVATION: Correct result parsing and NO window resizing
+   * Activation de fenêtre optimisée
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
     
     try {
-      console.log(`WindowManagerWindows: FIXED activation for ${windowId} (NO RESIZE)`);
+      console.log(`WindowManagerWindows: Activating ${windowId}`);
       
-      // Get window handle
+      // Obtenir le handle de fenêtre
       const handle = this.handleMapping.get(windowId);
       if (!handle || handle === 0) {
         console.error(`WindowManagerWindows: No valid handle for ${windowId}`);
         return false;
       }
       
-      // Check activation cache for performance
+      // Vérifier le cache d'activation pour la performance
       const cacheKey = handle.toString();
       const now = Date.now();
       
@@ -556,8 +552,8 @@ class WindowManagerWindows {
         }
       }
       
-      // FIXED ACTIVATION: Only bring to front, never resize
-      const success = await this.executeFixedWindowActivation(handle);
+      // Activation optimisée: seulement mettre au premier plan
+      const success = await this.executeOptimizedWindowActivation(handle);
       
       const duration = Date.now() - startTime;
       this.updateActivationStats(duration);
@@ -565,50 +561,44 @@ class WindowManagerWindows {
       if (success) {
         this.activationCache.set(cacheKey, now);
         this.updateActiveState(windowId);
-        console.log(`WindowManagerWindows: FIXED activation SUCCESS for ${windowId} in ${duration}ms (NO RESIZE)`);
+        console.log(`WindowManagerWindows: Activation SUCCESS for ${windowId} in ${duration}ms`);
         return true;
       } else {
-        // REMOVED: No error message - just return false silently
         return false;
       }
       
     } catch (error) {
-      // REMOVED: No error logging - just return false silently
       return false;
     }
   }
 
   /**
-   * FIXED ACTIVATION: Only bring to front, NEVER resize
+   * Exécution d'activation optimisée
    */
-  async executeFixedWindowActivation(handle) {
+  async executeOptimizedWindowActivation(handle) {
     try {
-      console.log(`WindowManagerWindows: Executing FIXED activation for handle ${handle} (NO RESIZE)`);
+      console.log(`WindowManagerWindows: Executing optimized activation for handle ${handle}`);
       
-      // FIXED: Only use SetForegroundWindow - NO ShowWindow, NO BringToTop
       const success = await this.tryOnlySetForegroundWindow(handle);
       if (success) {
         console.log('WindowManagerWindows: SetForegroundWindow SUCCESS ✅');
         return true;
       }
       
-      // REMOVED: No error message - just return false
       return false;
       
     } catch (error) {
-      // REMOVED: No error logging - just return false
       return false;
     }
   }
 
   /**
-   * FIXED: Only SetForegroundWindow with CORRECT result parsing
+   * SetForegroundWindow uniquement
    */
   async tryOnlySetForegroundWindow(handle) {
     try {
-      console.log(`WindowManagerWindows: Using ONLY SetForegroundWindow for handle ${handle}`);
+      console.log(`WindowManagerWindows: Using SetForegroundWindow for handle ${handle}`);
       
-      // FIXED: Simple command that ONLY brings window to front
       const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\") ] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; $result = [Win32]::SetForegroundWindow([IntPtr]${handle}); Write-Output $result"`;
       
       const { stdout, stderr } = await execAsync(command, { 
@@ -617,12 +607,9 @@ class WindowManagerWindows {
         windowsHide: true
       });
       
-      // REMOVED: Debug logging that was causing confusion
-      
-      // FIXED: Correct result parsing - PowerShell returns "True" or "False"
       const result = stdout && stdout.trim();
       
-      // FIXED: Case-insensitive parsing for PowerShell boolean results
+      // Parsing correct des résultats booléens PowerShell
       const success = result && (
         result.toLowerCase() === 'true' || 
         result === 'True' || 
@@ -637,13 +624,12 @@ class WindowManagerWindows {
       return success;
       
     } catch (error) {
-      // REMOVED: Error logging - just return false
       return false;
     }
   }
 
   /**
-   * WORKING: Updates active state of windows efficiently
+   * Mise à jour de l'état actif des fenêtres
    */
   updateActiveState(activeWindowId) {
     for (const [windowId, windowData] of this.windows) {
@@ -654,7 +640,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * REMOVED: Window organization - NOT WORKING
+   * Organisation des fenêtres désactivée
    */
   async organizeWindows(layout = 'grid') {
     console.log(`WindowManagerWindows: Window organization DISABLED - not working properly`);
@@ -662,7 +648,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Performance statistics tracking
+   * Mise à jour des statistiques de détection
    */
   updateDetectionStats(duration) {
     this.performanceStats.detectionCount++;
@@ -671,6 +657,9 @@ class WindowManagerWindows {
     this.performanceStats.avgDetectionTime = ((current * (count - 1)) + duration) / count;
   }
 
+  /**
+   * Mise à jour des statistiques d'activation
+   */
   updateActivationStats(duration) {
     this.performanceStats.activationCount++;
     const count = this.performanceStats.activationCount;
@@ -686,7 +675,7 @@ class WindowManagerWindows {
     };
   }
 
-  // Class management methods
+  // Gestion des classes
   setWindowClass(windowId, classKey) {
     try {
       const Store = require('electron-store');
@@ -708,7 +697,7 @@ class WindowManagerWindows {
     }
   }
 
-  // Storage methods with better error handling and caching
+  // Méthodes de stockage avec gestion d'erreur améliorée
   getStoredCustomName(windowId) {
     try {
       const Store = require('electron-store');
@@ -760,7 +749,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * WORKING: Enhanced cleanup with performance stats
+   * Nettoyage amélioré avec statistiques de performance
    */
   cleanup() {
     try {

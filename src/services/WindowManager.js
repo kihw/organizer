@@ -3,8 +3,7 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 const CacheManager = require('../core/CacheManager');
 
 /**
- * WindowManager v2.4 - NO TIMEOUT: Remove timeout that was causing false failures
- * CRITICAL FIX: Let PowerShell take the time it needs without timeout interference
+ * WindowManager v2.5 - Optimisé pour performance maximale
  */
 class WindowManager {
   constructor() {
@@ -27,11 +26,11 @@ class WindowManager {
 
     this.platformManager = this.createPlatformManager();
 
-    console.log('WindowManager: Initialized with NO TIMEOUT for reliable activation');
+    console.log('WindowManager: Initialized with optimized performance');
   }
 
   /**
-   * SIMPLIFIED: Creates platform-specific manager with fail-fast approach
+   * Création du gestionnaire de plateforme
    */
   createPlatformManager() {
     try {
@@ -61,14 +60,13 @@ class WindowManager {
   }
 
   /**
-   * CRITICAL FIX: Direct window detection with guaranteed return
+   * Détection garantie des fenêtres Dofus
    */
   async getDofusWindows() {
     const startTime = Date.now();
 
     try {
-      console.log('WindowManager: CRITICAL FIX - Starting guaranteed detection...');
-      console.log('WindowManager: Bypassing cache for guaranteed fresh detection');
+      console.log('WindowManager: Starting guaranteed detection...');
 
       if (!this.platformManager) {
         console.error('WindowManager: No platform manager - returning last detected windows');
@@ -83,13 +81,13 @@ class WindowManager {
       this.isScanning = true;
       this.stats.scans++;
 
-      console.log('WindowManager: Starting platform detection with guaranteed return...');
+      console.log('WindowManager: Starting platform detection...');
 
       const windows = await this.performGuaranteedDetection();
 
       if (windows && Array.isArray(windows)) {
         this.lastDetectedWindows = windows;
-        console.log(`WindowManager: CRITICAL FIX - Updated lastDetectedWindows with ${windows.length} windows`);
+        console.log(`WindowManager: Updated lastDetectedWindows with ${windows.length} windows`);
         
         this.windowCache.set('windows', windows);
         this.lastSuccessfulScan = Date.now();
@@ -102,7 +100,7 @@ class WindowManager {
       const duration = Date.now() - startTime;
       this.updateScanStats(duration);
 
-      console.log(`WindowManager: CRITICAL FIX - Returning ${this.lastDetectedWindows.length} windows in ${duration}ms`);
+      console.log(`WindowManager: Returning ${this.lastDetectedWindows.length} windows in ${duration}ms`);
       return this.lastDetectedWindows;
 
     } catch (error) {
@@ -118,13 +116,12 @@ class WindowManager {
   }
 
   /**
-   * CRITICAL FIX: Guaranteed detection with proper error handling
+   * Détection garantie avec gestion d'erreur
    */
   async performGuaranteedDetection() {
     try {
-      console.log('WindowManager: Performing guaranteed platform detection...');
+      console.log('WindowManager: Performing platform detection...');
 
-      // REMOVED: No timeout - let platform manager take the time it needs
       const windows = await this.platformManager.getDofusWindows();
 
       console.log(`WindowManager: Platform detection returned ${windows ? windows.length : 'null'} windows`);
@@ -137,7 +134,7 @@ class WindowManager {
   }
 
   /**
-   * CRITICAL: Ensure we always return a valid array
+   * Validation et garantie de retour d'array
    */
   validateAndEnsureArray(windows) {
     if (!windows) {
@@ -163,7 +160,7 @@ class WindowManager {
   }
 
   /**
-   * NO TIMEOUT: Direct activation without timeout interference
+   * Activation directe de fenêtre
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
@@ -187,9 +184,8 @@ class WindowManager {
         return false;
       }
 
-      console.log(`WindowManager: NO TIMEOUT activation for ${windowId}`);
+      console.log(`WindowManager: Activating ${windowId}`);
 
-      // REMOVED: No timeout - let platform manager take the time it needs
       const success = await this.platformManager.activateWindow(windowId);
 
       const duration = Date.now() - startTime;
@@ -200,25 +196,25 @@ class WindowManager {
         this.updateActiveStateMinimal(windowId);
 
         eventBus.emit('window:activated', { windowId, duration });
-        console.log(`WindowManager: NO TIMEOUT activation SUCCESS for ${windowId} in ${duration}ms`);
+        console.log(`WindowManager: Activation SUCCESS for ${windowId} in ${duration}ms`);
         return true;
       } else {
         this.updateActivationStats(duration, false);
-        console.warn(`WindowManager: NO TIMEOUT activation FAILED for ${windowId}`);
+        console.warn(`WindowManager: Activation FAILED for ${windowId}`);
         eventBus.emit('window:activation_failed', { windowId });
         return false;
       }
 
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`WindowManager: NO TIMEOUT activation error for ${windowId}:`, error.message);
+      console.error(`WindowManager: Activation error for ${windowId}:`, error.message);
       this.updateActivationStats(duration, false);
       return false;
     }
   }
 
   /**
-   * MINIMAL: Update active state with minimal processing
+   * Mise à jour minimale de l'état actif
    */
   updateActiveStateMinimal(activeWindowId) {
     this.lastDetectedWindows.forEach(window => {
@@ -235,7 +231,7 @@ class WindowManager {
   }
 
   /**
-   * SIMPLIFIED: Window organization with direct delegation
+   * Organisation simplifiée des fenêtres
    */
   async organizeWindows(layout = 'grid') {
     const startTime = Date.now();
@@ -248,7 +244,6 @@ class WindowManager {
 
       console.log(`WindowManager: Organizing windows in ${layout} layout`);
 
-      // REMOVED: No timeout for organization
       const success = await this.platformManager.organizeWindows(layout);
 
       const duration = Date.now() - startTime;
@@ -267,7 +262,7 @@ class WindowManager {
   }
 
   /**
-   * FAST: Cache invalidation
+   * Invalidation rapide du cache
    */
   invalidateCache() {
     this.windowCache.clear();
@@ -276,7 +271,7 @@ class WindowManager {
   }
 
   /**
-   * OPTIMIZED: Statistics tracking with minimal overhead
+   * Mise à jour des statistiques de scan
    */
   updateScanStats(duration) {
     const count = this.stats.scans;
@@ -284,6 +279,9 @@ class WindowManager {
     this.updateSuccessRate();
   }
 
+  /**
+   * Mise à jour des statistiques d'activation
+   */
   updateActivationStats(duration, success) {
     if (!success) {
       this.stats.failures++;
@@ -294,6 +292,9 @@ class WindowManager {
     this.updateSuccessRate();
   }
 
+  /**
+   * Mise à jour du taux de succès
+   */
   updateSuccessRate() {
     const total = this.stats.scans + this.stats.activations;
     if (total > 0) {
@@ -302,7 +303,7 @@ class WindowManager {
   }
 
   /**
-   * FAST: Performance statistics
+   * Statistiques de performance
    */
   getStats() {
     return {
@@ -320,7 +321,7 @@ class WindowManager {
   }
 
   /**
-   * DIRECT: Class management delegation
+   * Gestion des classes - délégation directe
    */
   getDofusClasses() {
     return this.platformManager ? this.platformManager.getDofusClasses() : {};
@@ -331,7 +332,7 @@ class WindowManager {
   }
 
   /**
-   * FAST: Resource cleanup
+   * Nettoyage rapide des ressources
    */
   cleanup() {
     const startTime = Date.now();
@@ -359,7 +360,7 @@ class WindowManager {
   }
 
   /**
-   * NEW: Health check for diagnostics
+   * Vérification de santé pour diagnostics
    */
   getHealthStatus() {
     const stats = this.getStats();
@@ -375,6 +376,9 @@ class WindowManager {
     };
   }
 
+  /**
+   * Détermine le statut de santé
+   */
   determineHealthStatus(stats, timeSinceLastScan) {
     if (stats.successRate < 80 || this.consecutiveFailures > 5) {
       return 'critical';
@@ -388,6 +392,9 @@ class WindowManager {
     return 'healthy';
   }
 
+  /**
+   * Identifie les problèmes
+   */
   identifyIssues(stats, timeSinceLastScan) {
     const issues = [];
     
@@ -410,6 +417,9 @@ class WindowManager {
     return issues;
   }
 
+  /**
+   * Génère des recommandations
+   */
   generateRecommendations(stats) {
     const recommendations = [];
     

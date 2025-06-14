@@ -166,43 +166,8 @@ class CacheManager {
       ...this.stats,
       hitRate: `${hitRate}%`,
       size: this.cache.size,
-      maxSize: this.maxSize,
-      memoryUsage: this.getMemoryUsage()
+      maxSize: this.maxSize
     };
-  }
-
-  /**
-   * Estime l'utilisation mémoire du cache
-   */
-  getMemoryUsage() {
-    let totalSize = 0;
-    
-    for (const [key, item] of this.cache) {
-      totalSize += this.estimateSize(key) + this.estimateSize(item);
-    }
-    
-    return `${(totalSize / 1024).toFixed(2)} KB`;
-  }
-
-  /**
-   * Estime la taille d'un objet en bytes
-   */
-  estimateSize(obj) {
-    const type = typeof obj;
-    
-    switch (type) {
-      case 'string':
-        return obj.length * 2; // UTF-16
-      case 'number':
-        return 8;
-      case 'boolean':
-        return 4;
-      case 'object':
-        if (obj === null) return 0;
-        return JSON.stringify(obj).length * 2;
-      default:
-        return 0;
-    }
   }
 
   /**

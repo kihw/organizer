@@ -179,7 +179,6 @@ class NotificationManager {
    */
   hide(notificationId) {
     if (this.notifications.has(notificationId)) {
-      const notification = this.notifications.get(notificationId);
       this.notifications.delete(notificationId);
       
       // Émettre l'événement pour le masquage
@@ -217,102 +216,9 @@ class NotificationManager {
       };
       
       const sound = sounds[type] || sounds.info;
-      
-      // Utiliser l'API Web Audio si disponible
-      if (typeof window !== 'undefined' && window.AudioContext) {
-        this.playWebAudioSound(type);
-      } else {
-        // Fallback pour Node.js/Electron
-        console.log(`NotificationManager: Would play sound: ${sound}`);
-      }
+      console.log(`NotificationManager: Would play sound: ${sound}`);
     } catch (error) {
       console.warn('NotificationManager: Error playing sound:', error);
-    }
-  }
-
-  /**
-   * Joue un son avec Web Audio API
-   */
-  playWebAudioSound(type) {
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      // Fréquences différentes selon le type
-      const frequencies = {
-        success: 800,
-        error: 300,
-        warning: 600,
-        info: 500,
-        activation: 1000
-      };
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.setValueAtTime(frequencies[type] || 500, audioContext.currentTime);
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.2);
-    } catch (error) {
-      console.warn('NotificationManager: Error with Web Audio:', error);
-    }
-  }
-
-  /**
-   * Affiche un overlay flash sur une fenêtre
-   */
-  showWindowFlash(windowId, options = {}) {
-    const flashData = {
-      windowId,
-      color: options.color || '#00ff00',
-      duration: options.duration || 200,
-      opacity: options.opacity || 0.3,
-      timestamp: Date.now()
-    };
-    
-    eventBus.emit('window:flash', flashData);
-    
-    return flashData;
-  }
-
-  /**
-   * Affiche une notification de progression
-   */
-  showProgress(message, progress = 0, options = {}) {
-    return this.show({
-      type: 'progress',
-      message,
-      progress: Math.max(0, Math.min(100, progress)),
-      icon: '⏳',
-      color: '#3498db',
-      duration: 0, // Pas de suppression automatique
-      ...options
-    });
-  }
-
-  /**
-   * Met à jour une notification de progression
-   */
-  updateProgress(notificationId, progress, message = null) {
-    const notification = this.notifications.get(notificationId);
-    if (notification && notification.type === 'progress') {
-      notification.progress = Math.max(0, Math.min(100, progress));
-      if (message) {
-        notification.message = message;
-      }
-      
-      eventBus.emit('notification:update', notification);
-      
-      // Supprimer automatiquement si terminé
-      if (progress >= 100) {
-        setTimeout(() => this.hide(notificationId), 1000);
-      }
     }
   }
 
@@ -341,24 +247,6 @@ class NotificationManager {
   }
 
   /**
-   * Obtient les statistiques des notifications
-   */
-  getStats() {
-    const notifications = Array.from(this.notifications.values());
-    const typeCount = {};
-    
-    notifications.forEach(notification => {
-      typeCount[notification.type] = (typeCount[notification.type] || 0) + 1;
-    });
-    
-    return {
-      total: notifications.length,
-      byType: typeCount,
-      settings: this.settings
-    };
-  }
-
-  /**
    * Teste les notifications avec des exemples
    */
   test() {
@@ -377,20 +265,6 @@ class NotificationManager {
     setTimeout(() => {
       this.showInfo('Test info notification');
     }, 3000);
-    
-    setTimeout(() => {
-      const progressId = this.showProgress('Test progress', 0);
-      
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 20;
-        this.updateProgress(progressId, progress, `Progress: ${progress}%`);
-        
-        if (progress >= 100) {
-          clearInterval(interval);
-        }
-      }, 500);
-    }, 4000);
   }
 
   /**

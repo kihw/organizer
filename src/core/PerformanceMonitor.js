@@ -157,27 +157,6 @@ class PerformanceMonitor {
   }
 
   /**
-   * Crée un timer pour mesurer manuellement
-   */
-  startTimer(operation, metadata = {}) {
-    const startTime = performance.now();
-    
-    return {
-      stop: () => {
-        const duration = performance.now() - startTime;
-        this.record(operation, duration, metadata);
-        return duration;
-      },
-      
-      lap: (lapName) => {
-        const duration = performance.now() - startTime;
-        this.record(`${operation}_${lapName}`, duration, metadata);
-        return duration;
-      }
-    };
-  }
-
-  /**
    * Obtient toutes les métriques
    */
   getMetrics() {
@@ -191,23 +170,11 @@ class PerformanceMonitor {
         minTime: parseFloat(metric.minTime.toFixed(2)),
         maxTime: parseFloat(metric.maxTime.toFixed(2)),
         threshold: this.thresholds[operation] || null,
-        lastRecorded: new Date(metric.lastRecorded).toISOString(),
-        recentAvg: this.calculateRecentAverage(metric.recentTimes)
+        lastRecorded: new Date(metric.lastRecorded).toISOString()
       };
     }
     
     return result;
-  }
-
-  /**
-   * Calcule la moyenne des mesures récentes
-   */
-  calculateRecentAverage(recentTimes, windowSize = 10) {
-    if (recentTimes.length === 0) return 0;
-    
-    const recent = recentTimes.slice(-windowSize);
-    const sum = recent.reduce((acc, item) => acc + item.duration, 0);
-    return parseFloat((sum / recent.length).toFixed(2));
   }
 
   /**
@@ -289,36 +256,6 @@ class PerformanceMonitor {
   setRecording(enabled) {
     this.isRecording = enabled;
     console.log(`PerformanceMonitor: Recording ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  /**
-   * Analyse les tendances de performance
-   */
-  analyzeTrends(operation, windowSize = 20) {
-    const metric = this.metrics.get(operation);
-    if (!metric || metric.recentTimes.length < windowSize) {
-      return null;
-    }
-    
-    const recent = metric.recentTimes.slice(-windowSize);
-    const older = metric.recentTimes.slice(-windowSize * 2, -windowSize);
-    
-    if (older.length === 0) return null;
-    
-    const recentAvg = recent.reduce((sum, item) => sum + item.duration, 0) / recent.length;
-    const olderAvg = older.reduce((sum, item) => sum + item.duration, 0) / older.length;
-    
-    const trend = recentAvg - olderAvg;
-    const trendPercentage = ((trend / olderAvg) * 100).toFixed(2);
-    
-    return {
-      operation,
-      recentAvg: parseFloat(recentAvg.toFixed(2)),
-      olderAvg: parseFloat(olderAvg.toFixed(2)),
-      trend: parseFloat(trend.toFixed(2)),
-      trendPercentage: `${trendPercentage}%`,
-      direction: trend > 0 ? 'slower' : trend < 0 ? 'faster' : 'stable'
-    };
   }
 }
 

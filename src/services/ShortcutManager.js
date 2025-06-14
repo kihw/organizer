@@ -4,8 +4,7 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 const CacheManager = require('../core/CacheManager');
 
 /**
- * ShortcutManager v2.4 - TIMEOUT REMOVED: No more activation timeouts
- * CRITICAL FIX: Remove timeout that was causing false failures
+ * ShortcutManager v2.5 - Optimisé pour performance maximale
  */
 class ShortcutManager {
   constructor() {
@@ -13,9 +12,7 @@ class ShortcutManager {
     this.active = false;
     this.registeredAccelerators = new Set();
     this.cache = new CacheManager({ maxSize: 100, defaultTTL: 300000 });
-    this.conflictResolver = new Map();
     
-    // REMOVED: Timeout system that was causing false failures
     this.activeConcurrentActivations = 0;
     this.maxConcurrentActivations = 3;
     
@@ -29,7 +26,7 @@ class ShortcutManager {
 
     this.cache.startAutoCleanup(300000);
 
-    console.log('ShortcutManager: Initialized with TIMEOUT REMOVED for reliable activation');
+    console.log('ShortcutManager: Initialized with optimized performance');
 
     eventBus.on('performance:alert', (alert) => {
       if (alert.operation.startsWith('shortcut_')) {
@@ -39,7 +36,7 @@ class ShortcutManager {
   }
 
   /**
-   * ULTRA-FAST: Shortcut registration with minimal overhead
+   * Enregistrement ultra-rapide de raccourci
    */
   async setWindowShortcut(windowId, shortcut, callback) {
     const startTime = Date.now();
@@ -93,7 +90,7 @@ class ShortcutManager {
   }
 
   /**
-   * ULTRA-FAST: Direct registration without retry overhead
+   * Enregistrement direct sans retry
    */
   async registerGlobalShortcutFast(accelerator, windowId, callback) {
     try {
@@ -113,10 +110,10 @@ class ShortcutManager {
   }
 
   /**
-   * NO TIMEOUT: Direct shortcut execution without timeout interference
+   * Exécution directe sans timeout
    */
   executeShortcutDirect(windowId, accelerator, callback) {
-    // Check concurrency limit
+    // Vérifier la limite de concurrence
     if (this.activeConcurrentActivations >= this.maxConcurrentActivations) {
       console.warn(`ShortcutManager: Concurrency limit reached, skipping activation`);
       return;
@@ -125,7 +122,7 @@ class ShortcutManager {
     this.activeConcurrentActivations++;
     this.stats.concurrentActivations = Math.max(this.stats.concurrentActivations, this.activeConcurrentActivations);
 
-    // Execute immediately without timeout
+    // Exécuter immédiatement
     this.processActivationNoTimeout(windowId, accelerator, callback)
       .finally(() => {
         this.activeConcurrentActivations--;
@@ -133,13 +130,13 @@ class ShortcutManager {
   }
 
   /**
-   * NO TIMEOUT: Direct activation processing without timeout interference
+   * Traitement d'activation sans timeout
    */
   async processActivationNoTimeout(windowId, accelerator, callback) {
     const startTime = Date.now();
 
     try {
-      console.log(`ShortcutManager: NO TIMEOUT activation ${accelerator} for ${windowId}`);
+      console.log(`ShortcutManager: Activation ${accelerator} for ${windowId}`);
 
       const shortcutInfo = this.shortcuts.get(windowId);
       if (shortcutInfo) {
@@ -147,7 +144,6 @@ class ShortcutManager {
       }
       this.stats.activations++;
 
-      // REMOVED: No timeout system - let PowerShell take the time it needs
       await callback();
 
       const duration = Date.now() - startTime;
@@ -159,7 +155,7 @@ class ShortcutManager {
         duration
       });
 
-      console.log(`ShortcutManager: NO TIMEOUT activation SUCCESS for ${windowId} in ${duration}ms`);
+      console.log(`ShortcutManager: Activation SUCCESS for ${windowId} in ${duration}ms`);
 
     } catch (error) {
       console.error('ShortcutManager: Activation error:', error);
@@ -174,7 +170,7 @@ class ShortcutManager {
   }
 
   /**
-   * OPTIMIZED: Fast average calculation
+   * Calcul rapide de la moyenne
    */
   updateAverageActivationTime(duration) {
     const count = this.stats.activations;
@@ -183,7 +179,7 @@ class ShortcutManager {
   }
 
   /**
-   * ULTRA-FAST: Optimized accelerator conversion with minimal string processing
+   * Conversion optimisée d'accélérateur
    */
   convertShortcutToAccelerator(shortcut) {
     if (!shortcut) return '';
@@ -201,7 +197,7 @@ class ShortcutManager {
   }
 
   /**
-   * OPTIMIZED: Pre-compiled fast conversion
+   * Conversion rapide pré-compilée
    */
   fastConvertParts(shortcut) {
     const modifiers = {
@@ -246,7 +242,7 @@ class ShortcutManager {
   }
 
   /**
-   * ULTRA-FAST: Shortcut removal with minimal overhead
+   * Suppression rapide de raccourci
    */
   async removeWindowShortcut(windowId) {
     try {
@@ -276,7 +272,7 @@ class ShortcutManager {
   }
 
   /**
-   * FAST: Quick conflict check
+   * Vérification rapide de conflit
    */
   checkConflictFast(accelerator, excludeWindowId = null) {
     for (const [windowId, shortcutInfo] of this.shortcuts) {
@@ -288,7 +284,7 @@ class ShortcutManager {
   }
 
   /**
-   * FAST: Simplified validation
+   * Validation simplifiée
    */
   validateShortcut(shortcut) {
     if (!shortcut) return { valid: false, reason: 'Empty shortcut' };
@@ -317,7 +313,7 @@ class ShortcutManager {
   }
 
   /**
-   * FAST: Parallel activation of all shortcuts
+   * Activation parallèle rapide
    */
   async activateAll() {
     const startTime = Date.now();
@@ -345,7 +341,7 @@ class ShortcutManager {
   }
 
   /**
-   * FAST: Quick deactivation
+   * Désactivation rapide
    */
   deactivateAll() {
     this.active = false;
@@ -362,7 +358,7 @@ class ShortcutManager {
   }
 
   /**
-   * OPTIMIZED: Performance alert handling
+   * Gestion d'alerte de performance
    */
   handlePerformanceAlert(alert) {
     console.warn(`ShortcutManager: Performance alert: ${alert.operation} ${alert.duration}ms`);
@@ -376,7 +372,7 @@ class ShortcutManager {
   }
 
   /**
-   * OPTIMIZED: Comprehensive statistics
+   * Statistiques complètes
    */
   getStats() {
     return {
@@ -392,7 +388,7 @@ class ShortcutManager {
   }
 
   /**
-   * NEW: Calculate success rate
+   * Calcul du taux de succès
    */
   calculateSuccessRate() {
     const total = this.stats.activations;
@@ -401,7 +397,7 @@ class ShortcutManager {
   }
 
   /**
-   * OPTIMIZED: Get all shortcuts with minimal processing
+   * Obtenir tous les raccourcis
    */
   getAllShortcuts() {
     const shortcuts = {};
@@ -417,7 +413,7 @@ class ShortcutManager {
   }
 
   /**
-   * FAST: Efficient cleanup
+   * Nettoyage efficace
    */
   cleanup() {
     const startTime = Date.now();
