@@ -356,10 +356,12 @@ class DofusOrganizer {
         }
       }
       
+      // IMPORTANT: Toggle shortcuts shortcut should ALWAYS work, regardless of shortcuts enabled state
       if (toggleShortcutsShortcut) {
         const accelerator = this.shortcutManager.convertShortcutToAccelerator(toggleShortcutsShortcut);
         if (accelerator) {
           const success = globalShortcut.register(accelerator, () => {
+            // This shortcut always works, even when shortcuts are disabled
             this.toggleShortcuts();
           });
           
@@ -465,14 +467,39 @@ class DofusOrganizer {
     
     ipcMain.handle('activate-window', async (event, windowId) => {
       console.log(`IPC: activate-window called for: ${windowId}`);
-      const result = await this.windowManager.activateWindow(windowId);
       
-      // Add a small delay to ensure window activation completes
-      if (result) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+      try {
+        const result = await this.windowManager.activateWindow(windowId);
+        
+        // Enhanced activation with retry mechanism
+        if (result) {
+          // Add a delay to ensure window activation completes
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Update the active state in our local data
+          this.dofusWindows.forEach(w => {
+            w.isActive = w.id === windowId;
+          });
+          
+          // Notify all windows about the state change
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
+          }
+          
+          if (this.dockWindow && !this.dockWindow.isDestroyed()) {
+            this.dockWindow.webContents.send('windows-updated', this.dofusWindows);
+          }
+          
+          console.log(`IPC: Window ${windowId} activated successfully`);
+        } else {
+          console.warn(`IPC: Failed to activate window ${windowId}`);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error(`IPC: Error activating window ${windowId}:`, error);
+        return false;
       }
-      
-      return result;
     });
     
     ipcMain.handle('refresh-windows', () => {
@@ -489,8 +516,9 @@ class DofusOrganizer {
         return false;
       }
       
-      return this.shortcutManager.setWindowShortcut(windowId, shortcut, () => {
-        this.windowManager.activateWindow(windowId);
+      return this.shortcutManager.setWindowShortcut(windowId, shortcut, async () => {
+        console.log(`ShortcutManager: Executing shortcut for window ${windowId}`);
+        await this.windowManager.activateWindow(windowId);
       });
     });
     
@@ -581,8 +609,9 @@ class DofusOrganizer {
     const shortcuts = this.store.get('shortcuts', {});
     console.log(`DofusOrganizer: Loading ${Object.keys(shortcuts).length} shortcuts`);
     Object.keys(shortcuts).forEach(windowId => {
-      this.shortcutManager.setWindowShortcut(windowId, shortcuts[windowId], () => {
-        this.windowManager.activateWindow(windowId);
+      this.shortcutManager.setWindowShortcut(windowId, shortcuts[windowId], async () => {
+        console.log(`ShortcutManager: Executing shortcut for window ${windowId}`);
+        await this.windowManager.activateWindow(windowId);
       });
     });
 
@@ -703,6 +732,7 @@ class DofusOrganizer {
     if (this.shortcutsEnabled) {
       console.log('DofusOrganizer: Activating shortcuts');
       this.shortcutManager.activateAll();
+      // Re-register global shortcuts (but toggle shortcut always stays active)
       this.registerGlobalShortcuts();
     }
   }
@@ -710,7 +740,19 @@ class DofusOrganizer {
   deactivateShortcuts() {
     console.log('DofusOrganizer: Deactivating shortcuts');
     this.shortcutManager.deactivateAll();
-    this.unregisterGlobalShortcuts();
+    
+    // IMPORTANT: Keep the toggle shortcut active even when shortcuts are disabled
+    const toggleShortcutsShortcut = this.store.get('globalShortcuts.toggleShortcuts');
+    if (toggleShortcutsShortcut) {
+      const accelerator = this.shortcutManager.convertShortcutToAccelerator(toggleShortcutsShortcut);
+      if (accelerator && !globalShortcut.isRegistered(accelerator)) {
+        globalShortcut.register(accelerator, () => {
+          this.toggleShortcuts();
+        });
+        this.globalShortcuts.toggleShortcuts = accelerator;
+        console.log('DofusOrganizer: Keeping toggle shortcut active while shortcuts are disabled');
+      }
+    }
   }
 
   cleanup() {

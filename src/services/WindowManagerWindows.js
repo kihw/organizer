@@ -131,6 +131,12 @@ public class WindowsAPI {
     [DllImport("user32.dll")]
     public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
     
+    [DllImport("user32.dll")]
+    public static extern bool AllowSetForegroundWindow(uint dwProcessId);
+    
+    [DllImport("user32.dll")]
+    public static extern bool SetFocus(IntPtr hWnd);
+    
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     
     public struct RECT {
@@ -143,8 +149,10 @@ public class WindowsAPI {
     public const int SW_RESTORE = 9;
     public const int SW_SHOW = 5;
     public const int SW_MAXIMIZE = 3;
+    public const int SW_FORCEMINIMIZE = 11;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_SHOWWINDOW = 0x0040;
     
     // Fixed: Use static readonly instead of const for IntPtr
     public static readonly IntPtr HWND_TOP = new IntPtr(0);
@@ -240,42 +248,69 @@ function Activate-Window {
     
     $hwnd = [IntPtr]$Handle
     try {
-        # Enhanced window activation process
+        # Enhanced window activation process with multiple techniques
+        $processId = 0
+        [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$processId)
+        
+        # Allow this process to set foreground window
+        [WindowsAPI]::AllowSetForegroundWindow($processId)
+        Start-Sleep -Milliseconds 50
+        
+        # Get current thread and window thread
         $currentThread = [WindowsAPI]::GetCurrentThreadId()
         $windowThread = 0
         [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$windowThread)
         
-        # Attach to the window's thread
+        # Attach to the window's thread if different
+        $attached = $false
         if ($windowThread -ne $currentThread) {
-            [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $true)
+            $attached = [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $true)
         }
         
-        # Restore if minimized
-        if ([WindowsAPI]::IsIconic($hwnd)) {
-            [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
-            Start-Sleep -Milliseconds 150
+        try {
+            # Step 1: Restore if minimized
+            if ([WindowsAPI]::IsIconic($hwnd)) {
+                [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
+                Start-Sleep -Milliseconds 200
+            }
+            
+            # Step 2: Show the window
+            [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_SHOW)
+            Start-Sleep -Milliseconds 100
+            
+            # Step 3: Bring to top
+            [WindowsAPI]::BringWindowToTop($hwnd)
+            Start-Sleep -Milliseconds 100
+            
+            # Step 4: Set as foreground window
+            $result1 = [WindowsAPI]::SetForegroundWindow($hwnd)
+            Start-Sleep -Milliseconds 100
+            
+            # Step 5: Set as active window
+            $result2 = [WindowsAPI]::SetActiveWindow($hwnd)
+            Start-Sleep -Milliseconds 100
+            
+            # Step 6: Set focus
+            [WindowsAPI]::SetFocus($hwnd)
+            Start-Sleep -Milliseconds 100
+            
+            # Step 7: Ensure it's on top with show flag
+            [WindowsAPI]::SetWindowPos($hwnd, [WindowsAPI]::HWND_TOP, 0, 0, 0, 0, 
+                                      [WindowsAPI]::SWP_NOMOVE -bor [WindowsAPI]::SWP_NOSIZE -bor [WindowsAPI]::SWP_SHOWWINDOW)
+            
+            # Final verification
+            $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
+            $success = $hwnd -eq $foregroundWindow
+            
+            Write-Host "Activation results: SetForegroundWindow=$result1, SetActiveWindow=$result2, FinalCheck=$success"
+            
+            return $success
+        } finally {
+            # Detach from thread if we attached
+            if ($attached) {
+                [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $false)
+            }
         }
-        
-        # Bring to top and set as foreground
-        [WindowsAPI]::BringWindowToTop($hwnd)
-        Start-Sleep -Milliseconds 50
-        
-        [WindowsAPI]::SetForegroundWindow($hwnd)
-        Start-Sleep -Milliseconds 50
-        
-        [WindowsAPI]::SetActiveWindow($hwnd)
-        Start-Sleep -Milliseconds 50
-        
-        # Ensure it's on top
-        [WindowsAPI]::SetWindowPos($hwnd, [WindowsAPI]::HWND_TOP, 0, 0, 0, 0, 
-                                  [WindowsAPI]::SWP_NOMOVE -bor [WindowsAPI]::SWP_NOSIZE)
-        
-        # Detach from thread
-        if ($windowThread -ne $currentThread) {
-            [WindowsAPI]::AttachThreadInput($currentThread, $windowThread, $false)
-        }
-        
-        return $true
     } catch {
         Write-Error "Failed to activate window: $_"
         return $false
@@ -764,8 +799,21 @@ try {
       
       if (this.psScriptReady && this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
         const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" activate "${windowId}"`;
-        const { stdout } = await execAsync(command, { timeout: 5000 });
-        return stdout.trim() === 'true';
+        const { stdout, stderr } = await execAsync(command, { timeout: 8000 }); // Increased timeout
+        
+        if (stderr && stderr.trim()) {
+          console.warn(`WindowManagerWindows: PowerShell activation stderr: ${stderr}`);
+        }
+        
+        const success = stdout.trim() === 'true';
+        console.log(`WindowManagerWindows: PowerShell activation result: ${success}`);
+        
+        if (success) {
+          // Add additional delay for window activation to complete
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        return success;
       } else {
         // Fallback activation method for test/wmic windows
         console.log(`WindowManagerWindows: Using fallback activation for ${windowId}`);
