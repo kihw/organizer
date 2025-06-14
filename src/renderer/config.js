@@ -15,6 +15,7 @@ class ConfigRenderer {
         this.shortcutsEnabled = true;
         this.globalShortcuts = {};
         this.currentGlobalShortcutType = null;
+        this.isLoading = false;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -48,7 +49,7 @@ class ConfigRenderer {
         // IPC listeners
         ipcRenderer.on('windows-updated', (event, windows) => {
             console.log('Config.js: Received windows-updated:', windows);
-            this.windows = windows;
+            this.windows = windows || [];
             this.renderWindows();
             this.updateWindowCount();
         });
@@ -173,10 +174,9 @@ class ConfigRenderer {
     async loadData() {
         try {
             console.log('Config.js: Loading initial data...');
+            this.isLoading = true;
             
-            this.windows = await ipcRenderer.invoke('get-dofus-windows');
-            console.log('Config.js: Loaded windows:', this.windows);
-            
+            // CORRECTION: Charger les données de base d'abord
             this.language = await ipcRenderer.invoke('get-language');
             console.log('Config.js: Loaded language with keys:', Object.keys(this.language));
             
@@ -191,10 +191,15 @@ class ConfigRenderer {
             this.shortcutsEnabled = await ipcRenderer.invoke('get-shortcuts-enabled');
             console.log('Config.js: Shortcuts enabled:', this.shortcutsEnabled);
 
-            // Get global shortcuts - now from config file
+            // Get global shortcuts
             this.globalShortcuts = await ipcRenderer.invoke('get-global-shortcuts');
             console.log('Config.js: Global shortcuts:', this.globalShortcuts);
             
+            // CORRECTION: Charger les fenêtres en dernier et forcer le rendu
+            this.windows = await ipcRenderer.invoke('get-dofus-windows');
+            console.log('Config.js: Loaded windows:', this.windows);
+            
+            // NOUVEAU: Forcer le rendu même si pas de fenêtres
             this.renderWindows();
             this.updateLanguage();
             this.loadDockSettings();
@@ -202,8 +207,15 @@ class ConfigRenderer {
             this.updateShortcutsUI();
             this.updateGlobalShortcutsDisplay();
             
+            this.isLoading = false;
+            
         } catch (error) {
             console.error('Config.js: Error loading data:', error);
+            this.isLoading = false;
+            
+            // NOUVEAU: Afficher l'interface même en cas d'erreur
+            this.renderWindows();
+            this.updateWindowCount();
         }
     }
 
@@ -215,13 +227,58 @@ class ConfigRenderer {
             return;
         }
 
-        if (this.windows.length === 0) {
-            this.elements.noWindows.style.display = 'block';
-            this.elements.windowsList.style.display = 'none';
-            this.elements.windowsList.innerHTML = '';
+        // CORRECTION: Toujours afficher quelque chose
+        if (this.isLoading) {
+            this.showLoadingState();
             return;
         }
 
+        if (!this.windows || this.windows.length === 0) {
+            this.showNoWindowsState();
+            return;
+        }
+
+        this.showWindowsList();
+    }
+
+    /**
+     * NOUVEAU: Affiche l'état de chargement
+     */
+    showLoadingState() {
+        this.elements.noWindows.style.display = 'block';
+        this.elements.windowsList.style.display = 'none';
+        
+        this.elements.noWindows.innerHTML = `
+            <div class="no-windows-icon">⏳</div>
+            <h3>Loading...</h3>
+            <p>Scanning for Dofus windows...</p>
+        `;
+    }
+
+    /**
+     * NOUVEAU: Affiche l'état "pas de fenêtres"
+     */
+    showNoWindowsState() {
+        this.elements.noWindows.style.display = 'block';
+        this.elements.windowsList.style.display = 'none';
+        this.elements.windowsList.innerHTML = '';
+        
+        const noWindowsText = this.language.displayGUI_nowindow || 'No Dofus windows detected. Make sure Dofus is running and click Refresh.';
+        
+        this.elements.noWindows.innerHTML = `
+            <div class="no-windows-icon">🎮</div>
+            <h3>No Dofus Windows Detected</h3>
+            <p>${noWindowsText}</p>
+            <button class="btn btn-primary" onclick="configRenderer.refreshWindows()">
+                <span>🔄 Refresh Now</span>
+            </button>
+        `;
+    }
+
+    /**
+     * NOUVEAU: Affiche la liste des fenêtres
+     */
+    showWindowsList() {
         this.elements.noWindows.style.display = 'none';
         this.elements.windowsList.style.display = 'grid';
 
@@ -394,18 +451,30 @@ class ConfigRenderer {
         try {
             console.log('Config.js: Refreshing windows...');
             this.elements.refreshBtn.disabled = true;
-            this.elements.refreshBtn.textContent = 'Refreshing...';
+            this.elements.refreshBtn.innerHTML = '<span>⏳ Refreshing...</span>';
             
+            // CORRECTION: Forcer un nouveau scan
             await ipcRenderer.invoke('refresh-windows');
             
-            setTimeout(() => {
-                this.elements.refreshBtn.disabled = false;
-                this.elements.refreshBtn.textContent = 'Refresh';
+            // NOUVEAU: Recharger les données après le refresh
+            setTimeout(async () => {
+                try {
+                    this.windows = await ipcRenderer.invoke('get-dofus-windows');
+                    console.log('Config.js: Refreshed windows:', this.windows);
+                    this.renderWindows();
+                    this.updateWindowCount();
+                } catch (error) {
+                    console.error('Config.js: Error reloading windows after refresh:', error);
+                } finally {
+                    this.elements.refreshBtn.disabled = false;
+                    this.elements.refreshBtn.innerHTML = '<span>🔄 Refresh</span>';
+                }
             }, 1000);
+            
         } catch (error) {
             console.error('Config.js: Error refreshing windows:', error);
             this.elements.refreshBtn.disabled = false;
-            this.elements.refreshBtn.textContent = 'Refresh';
+            this.elements.refreshBtn.innerHTML = '<span>🔄 Refresh</span>';
         }
     }
 
@@ -697,7 +766,7 @@ class ConfigRenderer {
         if (this.currentShortcut) {
             try {
                 if (this.currentGlobalShortcutType) {
-                    // Save global shortcut - now using config file
+                    // Save global shortcut
                     console.log(`Config.js: Saving global shortcut ${this.currentShortcut} for ${this.currentGlobalShortcutType}`);
                     
                     const success = await ipcRenderer.invoke('set-global-shortcut', this.currentGlobalShortcutType, this.currentShortcut);
@@ -712,7 +781,7 @@ class ConfigRenderer {
                         alert('Failed to save shortcut. It may be invalid or already in use.');
                     }
                 } else if (this.currentShortcutWindowId) {
-                    // Save window shortcut - now using config file
+                    // Save window shortcut
                     console.log(`Config.js: Saving shortcut ${this.currentShortcut} for window ${this.currentShortcutWindowId}`);
                     
                     const success = await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindowId, this.currentShortcut);
