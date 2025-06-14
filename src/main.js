@@ -735,8 +735,10 @@ class DofusOrganizer {
   // Load and register window shortcuts after windows are detected
   loadAndRegisterShortcuts() {
     if (this.shortcutsLoaded) {
-      console.log('DofusOrganizer: Shortcuts already loaded, skipping...');
-      return;
+      console.log('DofusOrganizer: Shortcuts already loaded, clearing and reloading...');
+      // Clear existing shortcuts before reloading
+      this.shortcutManager.cleanup();
+      this.shortcutsLoaded = false;
     }
     
     console.log('DofusOrganizer: Loading and registering window shortcuts from config file...');
@@ -773,6 +775,9 @@ class DofusOrganizer {
     
     console.log(`DofusOrganizer: Successfully registered ${registeredCount} window shortcuts`);
     this.shortcutsLoaded = true;
+    
+    // Re-register global shortcuts to ensure they work
+    this.registerGlobalShortcuts();
     
     // Update UI with shortcut information
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -814,6 +819,10 @@ class DofusOrganizer {
         // If shortcuts haven't been loaded yet and we have windows, load them
         if (!this.shortcutsLoaded && this.dofusWindows.length > 0) {
           console.log('DofusOrganizer: Windows detected, loading shortcuts...');
+          this.loadAndRegisterShortcuts();
+        } else if (this.shortcutsLoaded && this.dofusWindows.length > 0) {
+          // If shortcuts were already loaded, reload them to handle window changes
+          console.log('DofusOrganizer: Windows changed, reloading shortcuts...');
           this.loadAndRegisterShortcuts();
         }
         
