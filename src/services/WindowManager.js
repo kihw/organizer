@@ -7,6 +7,7 @@ class WindowManager {
     this.windows = new Map();
     this.lastWindowCheck = 0;
     this.isLinux = process.platform === 'linux';
+    this.windowIdMapping = new Map(); // Map stable IDs to current window handles
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -45,11 +46,18 @@ class WindowManager {
     return this.dofusClasses[classKey]?.name || 'Feca';
   }
 
+  // Generate stable window ID based on character name and class
+  generateStableWindowId(character, dofusClass, processId) {
+    const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedClass = dofusClass.toLowerCase();
+    return `${normalizedChar}_${normalizedClass}_${processId}`;
+  }
+
   async getDofusWindows() {
     try {
       // Throttle window checks to avoid performance issues
       const now = Date.now();
-      if (now - this.lastWindowCheck < 1000) {
+      if (now - this.lastWindowCheck < 500) { // Reduced throttle time
         const cachedWindows = Array.from(this.windows.values()).map(w => w.info);
         console.log(`WindowManager: Returning ${cachedWindows.length} cached windows`);
         return cachedWindows;
@@ -127,7 +135,7 @@ class WindowManager {
         // Format: windowId desktop pid className hostName title
         const parts = line.split(/\s+/);
         if (parts.length >= 6) {
-          const windowId = parts[0];
+          const windowHandle = parts[0];
           const desktop = parts[1];
           const pid = parts[2];
           const className = parts[3];
@@ -138,28 +146,40 @@ class WindowManager {
           
           if (this.isDofusWindow(title) || this.isDofusWindow(className)) {
             console.log(`✓ Found Dofus window: ${title}`);
-            currentWindowIds.add(windowId);
             
-            const windowClass = this.getStoredClass(windowId);
+            // Parse character info from title
+            const { character, dofusClass } = this.parseWindowTitle(title);
+            
+            // Generate stable ID
+            const stableId = this.generateStableWindowId(character, dofusClass, pid);
+            
+            // Map the stable ID to the current window handle
+            this.windowIdMapping.set(stableId, windowHandle);
+            currentWindowIds.add(stableId);
+            
+            const windowClass = this.getStoredClass(stableId);
+            const finalClass = windowClass !== 'feca' ? windowClass : dofusClass;
+            
             const windowInfo = {
-              id: windowId,
+              id: stableId, // Use stable ID
+              handle: windowHandle, // Keep the actual handle for activation
               title: title,
               processName: className.split('.')[0] || 'Dofus',
               className: className,
               pid: pid,
-              character: this.extractCharacterName(title),
-              dofusClass: windowClass,
-              customName: this.getStoredCustomName(windowId),
-              initiative: this.getStoredInitiative(windowId),
-              isActive: await this.isLinuxWindowActive(windowId),
-              bounds: await this.getLinuxWindowBounds(windowId),
-              avatar: this.getClassAvatar(windowClass),
-              shortcut: this.getStoredShortcut(windowId),
-              enabled: this.getStoredEnabled(windowId)
+              character: character,
+              dofusClass: finalClass,
+              customName: this.getStoredCustomName(stableId),
+              initiative: this.getStoredInitiative(stableId),
+              isActive: await this.isLinuxWindowActive(windowHandle),
+              bounds: await this.getLinuxWindowBounds(windowHandle),
+              avatar: this.getClassAvatar(finalClass),
+              shortcut: this.getStoredShortcut(stableId),
+              enabled: this.getStoredEnabled(stableId)
             };
             
             windows.push(windowInfo);
-            this.windows.set(windowId, { info: windowInfo });
+            this.windows.set(stableId, { info: windowInfo });
           }
         }
       }
@@ -169,10 +189,95 @@ class WindowManager {
     for (const [windowId] of this.windows) {
       if (!currentWindowIds.has(windowId)) {
         this.windows.delete(windowId);
+        this.windowIdMapping.delete(windowId);
       }
     }
 
     return windows;
+  }
+
+  parseWindowTitle(title) {
+    if (!title) {
+      return { character: 'Dofus Player', dofusClass: 'feca' };
+    }
+
+    console.log(`WindowManager: Parsing title: "${title}"`);
+
+    // Expected format: "Nom - Classe - Version - Release"
+    const parts = title.split(' - ').map(part => part.trim());
+    
+    if (parts.length >= 2) {
+      const characterName = parts[0];
+      const className = parts[1];
+      
+      // Normalize class name
+      const normalizedClass = this.normalizeClassName(className);
+      
+      console.log(`WindowManager: Parsed - Character: "${characterName}", Class: "${className}" -> "${normalizedClass}"`);
+      
+      return {
+        character: characterName || 'Dofus Player',
+        dofusClass: normalizedClass
+      };
+    }
+    
+    // Fallback: try to extract from other formats
+    const fallbackResult = this.extractCharacterNameFallback(title);
+    console.log(`WindowManager: Fallback parsing result:`, fallbackResult);
+    
+    return fallbackResult;
+  }
+
+  normalizeClassName(className) {
+    if (!className) return 'feca';
+    
+    const normalized = className.toLowerCase()
+      .replace(/[àáâãäå]/g, 'a')
+      .replace(/[èéêë]/g, 'e')
+      .replace(/[ìíîï]/g, 'i')
+      .replace(/[òóôõö]/g, 'o')
+      .replace(/[ùúûü]/g, 'u')
+      .replace(/[ç]/g, 'c')
+      .trim();
+    
+    // Class name mappings
+    const classNameMappings = {
+      'feca': 'feca', 'féca': 'feca',
+      'osamodas': 'osamodas',
+      'enutrof': 'enutrof',
+      'sram': 'sram',
+      'xelor': 'xelor', 'xélor': 'xelor',
+      'ecaflip': 'ecaflip',
+      'eniripsa': 'eniripsa',
+      'iop': 'iop',
+      'cra': 'cra',
+      'sadida': 'sadida',
+      'sacrieur': 'sacrieur',
+      'pandawa': 'pandawa',
+      'roublard': 'roublard', 'rogue': 'roublard',
+      'zobal': 'zobal', 'masqueraider': 'zobal',
+      'steamer': 'steamer', 'foggernaut': 'steamer',
+      'eliotrope': 'eliotrope', 'eliotrop': 'eliotrope', 'elio': 'eliotrope',
+      'huppermage': 'huppermage', 'hupper': 'huppermage',
+      'ouginak': 'ouginak', 'ougi': 'ouginak',
+      'forgelance': 'forgelance'
+    };
+    
+    // Check direct mappings first
+    if (classNameMappings[normalized]) {
+      return classNameMappings[normalized];
+    }
+    
+    // Check partial matches
+    for (const [key, value] of Object.entries(classNameMappings)) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        return value;
+      }
+    }
+    
+    // Default fallback
+    console.warn(`WindowManager: Unknown class name: "${className}", using default "feca"`);
+    return 'feca';
   }
 
   async getWindowsWithXdotool() {
@@ -259,10 +364,10 @@ class WindowManager {
     }
   }
 
-  async getWindowInfoById(windowId) {
+  async getWindowInfoById(windowHandle) {
     try {
       // Get window properties using xprop
-      const { stdout } = await execAsync(`xprop -id ${windowId} WM_NAME WM_CLASS _NET_WM_NAME _NET_WM_PID 2>/dev/null || echo ""`);
+      const { stdout } = await execAsync(`xprop -id ${windowHandle} WM_NAME WM_CLASS _NET_WM_NAME _NET_WM_PID 2>/dev/null || echo ""`);
       
       let title = '';
       let className = '';
@@ -290,22 +395,34 @@ class WindowManager {
       
       if (!title) return null;
       
-      const windowClass = this.getStoredClass(windowId);
+      // Parse character info from title
+      const { character, dofusClass } = this.parseWindowTitle(title);
+      
+      // Generate stable ID
+      const stableId = this.generateStableWindowId(character, dofusClass, pid);
+      
+      // Map the stable ID to the current window handle
+      this.windowIdMapping.set(stableId, windowHandle);
+      
+      const windowClass = this.getStoredClass(stableId);
+      const finalClass = windowClass !== 'feca' ? windowClass : dofusClass;
+      
       return {
-        id: windowId,
+        id: stableId, // Use stable ID
+        handle: windowHandle, // Keep the actual handle for activation
         title: title,
         processName: className || 'Unknown',
         className: className,
         pid: pid,
-        character: this.extractCharacterName(title),
-        dofusClass: windowClass,
-        customName: this.getStoredCustomName(windowId),
-        initiative: this.getStoredInitiative(windowId),
-        isActive: await this.isLinuxWindowActive(windowId),
-        bounds: await this.getLinuxWindowBounds(windowId),
-        avatar: this.getClassAvatar(windowClass),
-        shortcut: this.getStoredShortcut(windowId),
-        enabled: this.getStoredEnabled(windowId)
+        character: character,
+        dofusClass: finalClass,
+        customName: this.getStoredCustomName(stableId),
+        initiative: this.getStoredInitiative(stableId),
+        isActive: await this.isLinuxWindowActive(windowHandle),
+        bounds: await this.getLinuxWindowBounds(windowHandle),
+        avatar: this.getClassAvatar(finalClass),
+        shortcut: this.getStoredShortcut(stableId),
+        enabled: this.getStoredEnabled(stableId)
       };
     } catch (error) {
       return null;
@@ -333,30 +450,39 @@ class WindowManager {
         
         for (let i = 0; i < processes.length; i++) {
           const process = processes[i];
-          const windowId = `fallback_${process.pid}_${i}`;
           const title = this.extractTitleFromProcess(process.command);
           
           if (this.isDofusWindow(title)) {
-            const windowClass = this.getStoredClass(windowId);
+            // Parse character info from title
+            const { character, dofusClass } = this.parseWindowTitle(title);
+            
+            // Generate stable ID
+            const stableId = this.generateStableWindowId(character, dofusClass, process.pid);
+            
+            const windowClass = this.getStoredClass(stableId);
+            const finalClass = windowClass !== 'feca' ? windowClass : dofusClass;
+            
             const windowInfo = {
-              id: windowId,
+              id: stableId, // Use stable ID
+              handle: `fallback_${process.pid}_${i}`, // Fallback handle
               title: title,
               processName: 'Dofus',
               className: 'dofus',
               pid: process.pid,
-              character: this.extractCharacterName(title),
-              dofusClass: windowClass,
-              customName: this.getStoredCustomName(windowId),
-              initiative: this.getStoredInitiative(windowId),
+              character: character,
+              dofusClass: finalClass,
+              customName: this.getStoredCustomName(stableId),
+              initiative: this.getStoredInitiative(stableId),
               isActive: true,
               bounds: { x: 0, y: 0, width: 800, height: 600 },
-              avatar: this.getClassAvatar(windowClass),
-              shortcut: this.getStoredShortcut(windowId),
-              enabled: this.getStoredEnabled(windowId)
+              avatar: this.getClassAvatar(finalClass),
+              shortcut: this.getStoredShortcut(stableId),
+              enabled: this.getStoredEnabled(stableId)
             };
             
             windows.push(windowInfo);
-            this.windows.set(windowId, { info: windowInfo });
+            this.windows.set(stableId, { info: windowInfo });
+            this.windowIdMapping.set(stableId, windowInfo.handle);
           }
         }
       }
@@ -432,21 +558,62 @@ class WindowManager {
         return parts.slice(i).join(' ').substring(0, 50);
       }
     }
-    return 'Dofus Window';
+    return 'TestChar - Feca - Dofus 3 - Beta';
   }
 
-  async isLinuxWindowActive(windowId) {
+  extractCharacterNameFallback(title) {
+    if (!title) return { character: 'Dofus Player', dofusClass: 'feca' };
+    
+    // For Dofus 3, the title is usually just "Dofus"
+    if (title.trim() === 'Dofus') {
+      return { character: 'Dofus Player', dofusClass: 'feca' };
+    }
+    
+    // Try to extract character name from window title using various patterns
+    const patterns = [
+      /^([^-]+)\s*-\s*([^-]+)/i,  // "Name - Class" format
+      /dofus\s*-\s*(.+?)(?:\s*\(|$)/i,
+      /(.+?)\s*-\s*dofus/i,
+      /retro\s*-\s*(.+?)(?:\s*\(|$)/i,
+      /(.+?)\s*-\s*retro/i
+    ];
+    
+    for (const pattern of patterns) {
+      const match = title.match(pattern);
+      if (match && match[1]) {
+        let name = match[1].trim();
+        let detectedClass = 'feca';
+        
+        // If we have a second capture group, it might be the class
+        if (match[2]) {
+          detectedClass = this.normalizeClassName(match[2].trim());
+        }
+        
+        // Clean up common suffixes
+        name = name.replace(/\s*\(.*\)$/, '');
+        name = name.replace(/\s*-.*$/, '');
+        
+        if (name.length > 0 && name.length < 50 && name !== 'Dofus') {
+          return { character: name, dofusClass: detectedClass };
+        }
+      }
+    }
+    
+    return { character: 'Dofus Player', dofusClass: 'feca' };
+  }
+
+  async isLinuxWindowActive(windowHandle) {
     try {
-      const { stdout } = await execAsync(`xprop -id ${windowId} _NET_WM_STATE 2>/dev/null || echo ""`);
+      const { stdout } = await execAsync(`xprop -id ${windowHandle} _NET_WM_STATE 2>/dev/null || echo ""`);
       return !stdout.includes('_NET_WM_STATE_HIDDEN');
     } catch (error) {
       return true; // Assume active if we can't determine
     }
   }
 
-  async getLinuxWindowBounds(windowId) {
+  async getLinuxWindowBounds(windowHandle) {
     try {
-      const { stdout } = await execAsync(`xwininfo -id ${windowId} 2>/dev/null || echo ""`);
+      const { stdout } = await execAsync(`xwininfo -id ${windowHandle} 2>/dev/null || echo ""`);
       const lines = stdout.split('\n');
       
       let x = 0, y = 0, width = 800, height = 600;
@@ -517,42 +684,19 @@ class WindowManager {
     return isDofus;
   }
 
-  extractCharacterName(title) {
-    if (!title) return 'Dofus Player';
-    
-    // For Dofus 3, the title is usually just "Dofus"
-    // We'll use a simple approach for now
-    if (title.trim() === 'Dofus') {
-      return 'Dofus Player';
-    }
-    
-    // Try to extract character name from window title for other versions
-    const patterns = [
-      /dofus\s*-\s*(.+?)(?:\s*\(|$)/i,
-      /(.+?)\s*-\s*dofus/i
-    ];
-    
-    for (const pattern of patterns) {
-      const match = title.match(pattern);
-      if (match && match[1]) {
-        let name = match[1].trim();
-        // Clean up common suffixes
-        name = name.replace(/\s*\(.*\)$/, '');
-        name = name.replace(/\s*-.*$/, '');
-        if (name.length > 0 && name.length < 50 && name !== 'Dofus') {
-          return name;
-        }
-      }
-    }
-    
-    // Default fallback
-    return 'Dofus Player';
-  }
-
   async activateWindow(windowId) {
     try {
+      console.log(`WindowManager: Activating window ${windowId}`);
+      
+      // Get the actual window handle from the stable ID
+      const windowHandle = this.windowIdMapping.get(windowId);
+      if (!windowHandle) {
+        console.error(`WindowManager: No handle found for window ID ${windowId}`);
+        return false;
+      }
+      
       if (this.isLinux) {
-        return await this.activateLinuxWindow(windowId);
+        return await this.activateLinuxWindow(windowHandle);
       } else {
         return this.activateFallbackWindow(windowId);
       }
@@ -562,13 +706,13 @@ class WindowManager {
     }
   }
 
-  async activateLinuxWindow(windowId) {
+  async activateLinuxWindow(windowHandle) {
     try {
       // Try multiple methods to activate window on Linux
       const commands = [
-        `wmctrl -i -a ${windowId}`,
-        `xdotool windowactivate ${windowId}`,
-        `xprop -id ${windowId} -f _NET_ACTIVE_WINDOW 32a -set _NET_ACTIVE_WINDOW 1`
+        `wmctrl -i -a ${windowHandle}`,
+        `xdotool windowactivate ${windowHandle}`,
+        `xprop -id ${windowHandle} -f _NET_ACTIVE_WINDOW 32a -set _NET_ACTIVE_WINDOW 1`
       ];
 
       for (const command of commands) {
@@ -596,8 +740,14 @@ class WindowManager {
 
   async moveWindow(windowId, x, y) {
     try {
+      const windowHandle = this.windowIdMapping.get(windowId);
+      if (!windowHandle) {
+        console.error(`WindowManager: No handle found for window ID ${windowId}`);
+        return false;
+      }
+      
       if (this.isLinux) {
-        await execAsync(`wmctrl -i -r ${windowId} -e 0,${x},${y},-1,-1 2>/dev/null`);
+        await execAsync(`wmctrl -i -r ${windowHandle} -e 0,${x},${y},-1,-1 2>/dev/null`);
         return true;
       }
     } catch (error) {
@@ -608,8 +758,14 @@ class WindowManager {
 
   async resizeWindow(windowId, width, height) {
     try {
+      const windowHandle = this.windowIdMapping.get(windowId);
+      if (!windowHandle) {
+        console.error(`WindowManager: No handle found for window ID ${windowId}`);
+        return false;
+      }
+      
       if (this.isLinux) {
-        await execAsync(`wmctrl -i -r ${windowId} -e 0,-1,-1,${width},${height} 2>/dev/null`);
+        await execAsync(`wmctrl -i -r ${windowHandle} -e 0,-1,-1,${width},${height} 2>/dev/null`);
         return true;
       }
     } catch (error) {

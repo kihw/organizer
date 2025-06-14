@@ -8,7 +8,8 @@ class WindowManagerWindows {
     this.lastWindowCheck = 0;
     this.psScriptPath = null;
     this.psScriptReady = false;
-    this.activationCache = new Map(); // Cache for faster activation
+    this.activationCache = new Map();
+    this.windowIdMapping = new Map(); // Map stable IDs to current window handles
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -141,6 +142,12 @@ public class WindowsAPI {
     [DllImport("user32.dll")]
     public static extern bool SwitchToThisWindow(IntPtr hWnd, bool fUnknown);
     
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr ProcessId);
+    
+    [DllImport("kernel32.dll")]
+    public static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
+    
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     
     public struct RECT {
@@ -251,28 +258,37 @@ function Activate-Window {
     
     $hwnd = [IntPtr]$Handle
     try {
-        # Ultra-fast activation method - minimal delays
-        $processId = 0
-        [WindowsAPI]::GetWindowThreadProcessId($hwnd, [ref]$processId)
+        # Get current foreground window and thread
+        $currentForeground = [WindowsAPI]::GetForegroundWindow()
+        $currentThread = [WindowsAPI]::GetCurrentThreadId()
         
-        # Allow this process to set foreground window
-        [WindowsAPI]::AllowSetForegroundWindow($processId)
+        # Get target window thread
+        $targetThread = [WindowsAPI]::GetWindowThreadProcessId($hwnd, [IntPtr]::Zero)
+        
+        # Attach input to target thread for reliable activation
+        if ($targetThread -ne $currentThread) {
+            [WindowsAPI]::AttachThreadInput($currentThread, $targetThread, $true)
+        }
         
         # Restore if minimized
         if ([WindowsAPI]::IsIconic($hwnd)) {
             [WindowsAPI]::ShowWindow($hwnd, [WindowsAPI]::SW_RESTORE)
+            Start-Sleep -Milliseconds 50
         }
         
-        # Use SwitchToThisWindow for fastest activation
-        [WindowsAPI]::SwitchToThisWindow($hwnd, $true)
-        
-        # Bring to top
+        # Multiple activation attempts for reliability
         [WindowsAPI]::BringWindowToTop($hwnd)
+        [WindowsAPI]::SetForegroundWindow($hwnd)
+        [WindowsAPI]::SetActiveWindow($hwnd)
+        [WindowsAPI]::SetFocus($hwnd)
         
-        # Set as foreground
-        $result = [WindowsAPI]::SetForegroundWindow($hwnd)
+        # Detach input threads
+        if ($targetThread -ne $currentThread) {
+            [WindowsAPI]::AttachThreadInput($currentThread, $targetThread, $false)
+        }
         
-        # Final verification
+        # Verify activation
+        Start-Sleep -Milliseconds 100
         $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
         $success = $hwnd -eq $foregroundWindow
         
@@ -383,11 +399,18 @@ try {
     return this.dofusClasses[classKey]?.name || 'Feca';
   }
 
+  // Generate stable window ID based on character name and class
+  generateStableWindowId(character, dofusClass, processId) {
+    const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedClass = dofusClass.toLowerCase();
+    return `${normalizedChar}_${normalizedClass}_${processId}`;
+  }
+
   async getDofusWindows() {
     try {
       // Throttle window checks to avoid performance issues
       const now = Date.now();
-      if (now - this.lastWindowCheck < 1000) {
+      if (now - this.lastWindowCheck < 500) { // Reduced throttle time
         const cachedWindows = Array.from(this.windows.values()).map(w => w.info);
         console.log(`WindowManagerWindows: Returning ${cachedWindows.length} cached windows`);
         return cachedWindows;
@@ -407,12 +430,6 @@ try {
       if (rawWindows.length === 0) {
         console.log('WindowManagerWindows: PowerShell returned no windows, trying alternative method...');
         rawWindows = await this.getWindowsWithAlternativeMethod();
-      }
-      
-      // If still no windows, try WMIC fallback
-      if (rawWindows.length === 0) {
-        console.log('WindowManagerWindows: Alternative method returned no windows, trying WMIC...');
-        rawWindows = await this.getWindowsWithWmic();
       }
 
       const dofusWindows = this.processRawWindows(rawWindows);
@@ -437,11 +454,10 @@ try {
   async getWindowsWithPowerShell() {
     try {
       const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows`;
-      const { stdout, stderr } = await execAsync(command, { timeout: 10000 });
+      const { stdout, stderr } = await execAsync(command, { timeout: 8000 });
       
       if (stderr && stderr.trim()) {
         console.warn('WindowManagerWindows: PowerShell stderr:', stderr);
-        // Don't fail completely on stderr, try to parse stdout anyway
       }
       
       if (stdout && stdout.trim() && stdout.trim() !== '[]') {
@@ -506,88 +522,6 @@ try {
     }
   }
 
-  async getWindowsWithWmic() {
-    try {
-      console.log('WindowManagerWindows: Using WMIC fallback method...');
-      
-      // Get processes that might be Dofus
-      const processPatterns = ['Dofus', 'dofus', 'ankama', 'java'];
-      const windows = [];
-      
-      for (const pattern of processPatterns) {
-        try {
-          const command = `wmic process where "name like '%${pattern}%'" get processid,commandline,name /format:csv`;
-          const { stdout } = await execAsync(command, { timeout: 5000 });
-          
-          if (stdout.trim()) {
-            const lines = stdout.trim().split('\n').slice(1); // Skip header
-            
-            for (const line of lines) {
-              if (line.trim()) {
-                const parts = line.split(',');
-                if (parts.length >= 4) {
-                  const commandLine = parts[1] || '';
-                  const name = parts[2] || '';
-                  const processId = parts[3] || '';
-                  
-                  if (processId && this.isDofusProcess(commandLine + ' ' + name)) {
-                    // Create a basic window info object
-                    const windowId = `wmic_${processId}_${Date.now()}`;
-                    const title = this.extractTitleFromProcess(commandLine + ' ' + name);
-                    
-                    windows.push({
-                      Handle: windowId,
-                      Title: title,
-                      ClassName: 'Unknown',
-                      ProcessId: parseInt(processId),
-                      IsActive: true,
-                      Bounds: { X: 0, Y: 0, Width: 800, Height: 600 }
-                    });
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(`WindowManagerWindows: WMIC pattern ${pattern} failed:`, error.message);
-        }
-      }
-      
-      return windows;
-    } catch (error) {
-      console.error('WindowManagerWindows: WMIC fallback failed:', error);
-      return [];
-    }
-  }
-
-  isDofusProcess(commandLine) {
-    if (!commandLine) return false;
-    
-    const commandLower = commandLine.toLowerCase();
-    
-    // Exclude obvious non-Dofus processes
-    const excludes = ['organizer', 'electron', 'chrome', 'firefox', 'explorer'];
-    if (excludes.some(exclude => commandLower.includes(exclude))) {
-      return false;
-    }
-    
-    // Check for Dofus-related terms
-    const dofusTerms = ['dofus', 'ankama', 'steamer', 'boulonix'];
-    return dofusTerms.some(term => commandLower.includes(term));
-  }
-
-  extractTitleFromProcess(commandLine) {
-    // Extract a reasonable title from the command line
-    if (commandLine.toLowerCase().includes('retro')) {
-      return 'TestChar - Feca - Dofus Retro - 1.29';
-    } else if (commandLine.toLowerCase().includes('dofus')) {
-      return 'TestChar - Iop - Dofus 3 - Beta';
-    } else if (commandLine.toLowerCase().includes('ankama')) {
-      return 'TestChar - Cra - Dofus 2 - Release';
-    }
-    return 'TestChar - Feca - Dofus 3 - Beta';
-  }
-
   processRawWindows(rawWindows) {
     const processedWindows = [];
     const currentWindowIds = new Set();
@@ -599,41 +533,49 @@ try {
         continue;
       }
       
-      const windowId = rawWindow.Handle.toString();
-      currentWindowIds.add(windowId);
+      const windowHandle = rawWindow.Handle.toString();
       
       // Parse character info from title using the format: Nom - Classe - Version - Release
       const { character, dofusClass } = this.parseWindowTitle(rawWindow.Title);
       
+      // Generate stable ID based on character and class
+      const stableId = this.generateStableWindowId(character, dofusClass, rawWindow.ProcessId);
+      
+      // Map the stable ID to the current window handle
+      this.windowIdMapping.set(stableId, windowHandle);
+      currentWindowIds.add(stableId);
+      
       // Get stored class or use detected class
-      const storedClass = this.getStoredClass(windowId);
+      const storedClass = this.getStoredClass(stableId);
       const finalClass = storedClass !== 'feca' ? storedClass : dofusClass;
       
       const windowInfo = {
-        id: windowId,
+        id: stableId, // Use stable ID instead of window handle
+        handle: windowHandle, // Keep the actual handle for activation
         title: rawWindow.Title || 'Unknown Window',
         processName: this.extractProcessName(rawWindow.ClassName),
         className: rawWindow.ClassName || 'Unknown',
         pid: (rawWindow.ProcessId || 0).toString(),
         character: character,
         dofusClass: finalClass,
-        customName: this.getStoredCustomName(windowId),
-        initiative: this.getStoredInitiative(windowId),
+        customName: this.getStoredCustomName(stableId),
+        initiative: this.getStoredInitiative(stableId),
         isActive: rawWindow.IsActive || false,
         bounds: rawWindow.Bounds || { X: 0, Y: 0, Width: 800, Height: 600 },
         avatar: this.getClassAvatar(finalClass),
-        shortcut: this.getStoredShortcut(windowId),
-        enabled: this.getStoredEnabled(windowId)
+        shortcut: this.getStoredShortcut(stableId),
+        enabled: this.getStoredEnabled(stableId)
       };
       
       processedWindows.push(windowInfo);
-      this.windows.set(windowId, { info: windowInfo });
+      this.windows.set(stableId, { info: windowInfo });
     }
     
     // Remove windows that no longer exist
     for (const [windowId] of this.windows) {
       if (!currentWindowIds.has(windowId)) {
         this.windows.delete(windowId);
+        this.windowIdMapping.delete(windowId);
       }
     }
     
@@ -763,21 +705,28 @@ try {
     try {
       console.log(`WindowManagerWindows: Activating window ${windowId}`);
       
+      // Get the actual window handle from the stable ID
+      const windowHandle = this.windowIdMapping.get(windowId);
+      if (!windowHandle) {
+        console.error(`WindowManagerWindows: No handle found for window ID ${windowId}`);
+        return false;
+      }
+      
       // Check cache first for faster activation
-      const cacheKey = windowId;
+      const cacheKey = windowHandle;
       const now = Date.now();
       
       if (this.activationCache.has(cacheKey)) {
         const lastActivation = this.activationCache.get(cacheKey);
-        if (now - lastActivation < 500) { // 500ms cooldown
+        if (now - lastActivation < 300) { // 300ms cooldown
           console.log(`WindowManagerWindows: Activation cooldown active for ${windowId}`);
           return true;
         }
       }
       
-      if (this.psScriptReady && this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
-        const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" activate "${windowId}"`;
-        const { stdout, stderr } = await execAsync(command, { timeout: 3000 }); // Reduced timeout for speed
+      if (this.psScriptReady && this.psScriptPath) {
+        const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" activate "${windowHandle}"`;
+        const { stdout, stderr } = await execAsync(command, { timeout: 2000 }); // Reduced timeout for speed
         
         if (stderr && stderr.trim()) {
           console.warn(`WindowManagerWindows: PowerShell activation stderr: ${stderr}`);
@@ -795,11 +744,14 @@ try {
             const oldestKey = this.activationCache.keys().next().value;
             this.activationCache.delete(oldestKey);
           }
+          
+          // Update active state immediately
+          this.updateActiveState(windowId);
         }
         
         return success;
       } else {
-        // Fallback activation method for test/wmic windows
+        // Fallback activation method
         console.log(`WindowManagerWindows: Using fallback activation for ${windowId}`);
         return this.activateWindowFallback(windowId);
       }
@@ -809,26 +761,19 @@ try {
     }
   }
 
+  updateActiveState(activeWindowId) {
+    // Update the active state of all windows
+    for (const [windowId, windowData] of this.windows) {
+      windowData.info.isActive = windowId === activeWindowId;
+    }
+  }
+
   async activateWindowFallback(windowId) {
     try {
-      // Try using basic Windows commands
-      if (windowId.startsWith('wmic_')) {
-        const processId = windowId.split('_')[1];
-        if (processId) {
-          // Try to focus using process ID
-          const command = `powershell.exe -Command "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::AppActivate(${processId})"`;
-          await execAsync(command, { timeout: 2000 }); // Reduced timeout
-          return true;
-        }
-      }
-      
-      // For test windows, just return success
-      if (windowId.startsWith('test_')) {
-        console.log(`WindowManagerWindows: Test window ${windowId} activated (simulated)`);
-        return true;
-      }
-      
-      return false;
+      // For fallback windows, just return success
+      console.log(`WindowManagerWindows: Fallback window ${windowId} activated (simulated)`);
+      this.updateActiveState(windowId);
+      return true;
     } catch (error) {
       console.error('WindowManagerWindows: Fallback activation failed:', error);
       return false;
@@ -837,8 +782,14 @@ try {
 
   async moveWindow(windowId, x, y, width = -1, height = -1) {
     try {
-      if (this.psScriptReady && this.psScriptPath && !windowId.startsWith('test_') && !windowId.startsWith('wmic_')) {
-        const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" move "${windowId}" "${x}" "${y}" "${width}" "${height}"`;
+      const windowHandle = this.windowIdMapping.get(windowId);
+      if (!windowHandle) {
+        console.error(`WindowManagerWindows: No handle found for window ID ${windowId}`);
+        return false;
+      }
+      
+      if (this.psScriptReady && this.psScriptPath) {
+        const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" move "${windowHandle}" "${x}" "${y}" "${width}" "${height}"`;
         const { stdout } = await execAsync(command, { timeout: 3000 });
         return stdout.trim() === 'true';
       }
@@ -1016,6 +967,7 @@ try {
     
     // Clear activation cache
     this.activationCache.clear();
+    this.windowIdMapping.clear();
   }
 }
 
