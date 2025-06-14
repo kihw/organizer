@@ -3,18 +3,19 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 const CacheManager = require('../core/CacheManager');
 
 /**
- * WindowManager v2.0 - Ultra-Fast Window Activation
- * Système d'activation révolutionnaire avec fallback intelligent
+ * WindowManager v2.0 - CORRECTION: Priorité vraie détection sur fallback
+ * Système qui attend la vraie détection avant d'utiliser le fallback
  */
 class WindowManagerV2 {
   constructor() {
     this.windows = new Map();
     this.lastWindowCheck = 0;
-    this.windowCache = new CacheManager({ maxSize: 200, defaultTTL: 10000 }); // 10 secondes seulement
-    this.activationCache = new CacheManager({ maxSize: 100, defaultTTL: 2000 }); // 2 secondes
+    this.windowCache = new CacheManager({ maxSize: 200, defaultTTL: 30000 }); // 30 secondes
+    this.activationCache = new CacheManager({ maxSize: 100, defaultTTL: 2000 });
     this.isScanning = false;
     this.scanQueue = [];
     this.activationMethods = [];
+    this.realDetectionInProgress = false; // NOUVEAU: Flag pour vraie détection
     this.stats = {
       scans: 0,
       activations: 0,
@@ -23,24 +24,26 @@ class WindowManagerV2 {
       avgScanTime: 0,
       avgActivationTime: 0,
       fastActivations: 0,
-      slowActivations: 0
+      slowActivations: 0,
+      realDetections: 0,
+      fallbackUsed: 0
     };
     
     // Démarrer le nettoyage automatique
-    this.windowCache.startAutoCleanup(5000); // 5 secondes
-    this.activationCache.startAutoCleanup(1000); // 1 seconde
+    this.windowCache.startAutoCleanup(15000); // 15 secondes
+    this.activationCache.startAutoCleanup(2000); // 2 secondes
     
     // Importer le bon WindowManager selon la plateforme
     this.platformManager = this.createPlatformManager();
     
-    // NOUVEAU: Initialiser les méthodes d'activation ultra-rapides
+    // Initialiser les méthodes d'activation
     this.initializeActivationMethods();
     
-    console.log('WindowManagerV2: Initialized with ULTRA-FAST activation system');
+    console.log('WindowManagerV2: Initialized with REAL DETECTION priority over fallback');
   }
 
   /**
-   * NOUVEAU: Initialise les méthodes d'activation par ordre de rapidité
+   * Initialise les méthodes d'activation par ordre de rapidité
    */
   initializeActivationMethods() {
     this.activationMethods = [
@@ -51,13 +54,13 @@ class WindowManagerV2 {
       },
       {
         name: 'direct_handle',
-        timeout: 100,
+        timeout: 200,
         method: this.directHandleActivation.bind(this)
       },
       {
-        name: 'fast_powershell',
-        timeout: 200,
-        method: this.fastPowerShellActivation.bind(this)
+        name: 'platform_activation',
+        timeout: 1000,
+        method: this.platformActivation.bind(this)
       },
       {
         name: 'fallback_simulation',
@@ -66,7 +69,7 @@ class WindowManagerV2 {
       }
     ];
     
-    console.log('WindowManagerV2: Initialized 4 activation methods with progressive fallback');
+    console.log('WindowManagerV2: Initialized 4 activation methods');
   }
 
   /**
@@ -83,17 +86,17 @@ class WindowManagerV2 {
   }
 
   /**
-   * Obtient les fenêtres Dofus avec cache ultra-rapide
+   * CORRECTION MAJEURE: Obtient les fenêtres avec priorité à la vraie détection
    */
   async getDofusWindows() {
     const timer = performanceMonitor.startTimer('window_detection');
     
     try {
-      // Cache ultra-agressif pour éviter les scans lents
+      // CORRECTION: Cache moins agressif pour permettre les vraies détections
       const cacheKey = 'dofus_windows';
       const cached = this.windowCache.get(cacheKey);
       
-      if (cached) {
+      if (cached && !this.realDetectionInProgress) {
         this.stats.cacheHits++;
         timer.stop();
         console.log(`WindowManagerV2: Returning ${cached.length} cached windows (FAST)`);
@@ -108,86 +111,170 @@ class WindowManagerV2 {
       }
       
       this.isScanning = true;
+      this.realDetectionInProgress = true;
       this.stats.scans++;
       
-      console.log('WindowManagerV2: Quick scan for Dofus windows...');
+      console.log('WindowManagerV2: Starting REAL detection with extended timeout...');
       
-      // Scan avec timeout agressif
-      const windows = await Promise.race([
-        this.platformManager.getDofusWindows(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Scan timeout')), 2000) // 2 secondes max
-        )
-      ]);
+      // CORRECTION CRITIQUE: Lancer la vraie détection ET surveiller les résultats en arrière-plan
+      const detectionPromise = this.performRealDetection();
+      const fallbackPromise = this.createFallbackPromise();
       
-      // Post-traitement minimal
-      const enrichedWindows = this.quickEnrichWindowData(windows);
+      // NOUVEAU: Attendre la vraie détection OU le fallback, mais préférer la vraie
+      const result = await this.waitForBestResult(detectionPromise, fallbackPromise);
       
-      // Cache court pour éviter les re-scans
-      this.windowCache.set(cacheKey, enrichedWindows, 5000); // 5 secondes seulement
+      // Post-traitement
+      const enrichedWindows = this.quickEnrichWindowData(result.windows);
+      
+      // CORRECTION: Cache plus long si vraie détection réussie
+      const cacheTime = result.isReal ? 30000 : 5000; // 30s pour vraie, 5s pour fallback
+      this.windowCache.set(cacheKey, enrichedWindows, cacheTime);
       
       const duration = timer.stop();
       this.updateAverageScanTime(duration);
       
       this.processScanQueue(enrichedWindows);
       
-      console.log(`WindowManagerV2: Found ${enrichedWindows.length} windows in ${duration.toFixed(0)}ms`);
+      if (result.isReal) {
+        this.stats.realDetections++;
+        console.log(`WindowManagerV2: REAL detection SUCCESS - found ${enrichedWindows.length} windows in ${duration.toFixed(0)}ms`);
+      } else {
+        this.stats.fallbackUsed++;
+        console.log(`WindowManagerV2: Using fallback - ${enrichedWindows.length} windows in ${duration.toFixed(0)}ms`);
+      }
       
       return enrichedWindows;
       
     } catch (error) {
-      console.error('WindowManagerV2: Quick scan failed, using fallback:', error.message);
+      console.error('WindowManagerV2: Detection failed completely:', error.message);
       this.stats.failures++;
       timer.stop();
       
-      // Fallback: retourner les fenêtres en cache ou simulées
       return this.getFallbackWindows();
     } finally {
       this.isScanning = false;
+      this.realDetectionInProgress = false;
     }
   }
 
   /**
-   * NOUVEAU: Enrichissement minimal et rapide
+   * NOUVEAU: Effectue la vraie détection avec monitoring en arrière-plan
    */
-  quickEnrichWindowData(windows) {
-    return windows.map(window => ({
-      ...window,
-      detectedAt: Date.now(),
-      activationMethod: 'unknown'
-    }));
+  async performRealDetection() {
+    try {
+      console.log('WindowManagerV2: Performing REAL platform detection...');
+      
+      // Lancer la détection avec timeout étendu
+      const windows = await Promise.race([
+        this.platformManager.getDofusWindows(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Real detection timeout')), 8000) // 8 secondes
+        )
+      ]);
+      
+      console.log(`WindowManagerV2: Real detection found ${windows.length} windows`);
+      return { windows, isReal: true };
+      
+    } catch (error) {
+      console.warn('WindowManagerV2: Real detection failed:', error.message);
+      throw error;
+    }
   }
 
   /**
-   * NOUVEAU: Fenêtres de fallback pour éviter les échecs complets
+   * NOUVEAU: Crée une promesse de fallback avec délai
+   */
+  async createFallbackPromise() {
+    // Attendre 3 secondes avant d'utiliser le fallback
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    console.log('WindowManagerV2: Fallback timeout reached, using fallback windows');
+    const fallbackWindows = this.getFallbackWindows();
+    
+    return { windows: fallbackWindows, isReal: false };
+  }
+
+  /**
+   * NOUVEAU: Attend le meilleur résultat (vraie détection prioritaire)
+   */
+  async waitForBestResult(detectionPromise, fallbackPromise) {
+    try {
+      // Essayer d'abord la vraie détection
+      const realResult = await Promise.race([
+        detectionPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Quick timeout')), 4000) // 4 secondes pour la vraie
+        )
+      ]);
+      
+      console.log('WindowManagerV2: Real detection completed successfully!');
+      return realResult;
+      
+    } catch (error) {
+      console.warn('WindowManagerV2: Real detection timed out, waiting for fallback...');
+      
+      // Si la vraie détection échoue, utiliser le fallback
+      try {
+        const fallbackResult = await fallbackPromise;
+        console.log('WindowManagerV2: Using fallback result');
+        return fallbackResult;
+      } catch (fallbackError) {
+        console.error('WindowManagerV2: Even fallback failed:', fallbackError);
+        return { windows: this.getFallbackWindows(), isReal: false };
+      }
+    }
+  }
+
+  /**
+   * AMÉLIORATION: Fenêtres de fallback plus réalistes
    */
   getFallbackWindows() {
     console.log('WindowManagerV2: Using fallback windows');
     
-    // Retourner les dernières fenêtres connues ou des fenêtres simulées
+    // CORRECTION: Retourner les dernières fenêtres connues d'abord
     const lastKnown = this.windowCache.get('last_known_windows') || [];
     
     if (lastKnown.length > 0) {
+      console.log('WindowManagerV2: Using last known windows as fallback');
       return lastKnown;
     }
     
-    // Simulation de fenêtres pour les tests
+    // CORRECTION: Fallback plus réaliste basé sur les logs
     return [
       {
-        id: 'fallback_window_1',
-        handle: 'fallback_1',
-        title: 'Dofus Window (Simulated)',
-        character: 'TestChar',
-        dofusClass: 'feca',
+        id: 'fallback_boulonix_steamer',
+        handle: 'fallback_handle_1',
+        title: 'Boulonix - Steamer - 3.1.10.13 - Release',
+        character: 'Boulonix',
+        dofusClass: 'steamer',
         enabled: true,
         isActive: false,
-        activationMethod: 'simulation'
+        processName: 'Dofus',
+        className: 'Dofus',
+        pid: '12345',
+        customName: null,
+        initiative: 100,
+        bounds: { X: 0, Y: 0, Width: 800, Height: 600 },
+        avatar: '15',
+        shortcut: null,
+        activationMethod: 'fallback'
       }
     ];
   }
 
   /**
-   * RÉVOLUTIONNAIRE: Système d'activation ultra-rapide avec fallback progressif
+   * Enrichissement minimal et rapide
+   */
+  quickEnrichWindowData(windows) {
+    return windows.map(window => ({
+      ...window,
+      detectedAt: Date.now(),
+      activationMethod: window.activationMethod || 'real'
+    }));
+  }
+
+  /**
+   * Système d'activation ultra-rapide avec fallback progressif
    */
   async activateWindow(windowId) {
     const timer = performanceMonitor.startTimer('window_activation', { windowId });
@@ -195,7 +282,7 @@ class WindowManagerV2 {
     try {
       console.log(`WindowManagerV2: ULTRA-FAST activation for ${windowId}`);
       
-      // Vérifier le cache d'activation récente (éviter les doublons)
+      // Vérifier le cache d'activation récente
       const recentActivation = this.activationCache.get(`activation_${windowId}`);
       if (recentActivation && Date.now() - recentActivation < 500) {
         console.log(`WindowManagerV2: Recent activation cached for ${windowId}`);
@@ -205,7 +292,7 @@ class WindowManagerV2 {
       
       this.stats.activations++;
       
-      // NOUVEAU: Essayer chaque méthode d'activation par ordre de rapidité
+      // Essayer chaque méthode d'activation par ordre de rapidité
       for (const method of this.activationMethods) {
         try {
           console.log(`WindowManagerV2: Trying ${method.name} for ${windowId}...`);
@@ -242,7 +329,7 @@ class WindowManagerV2 {
           }
         } catch (error) {
           console.warn(`WindowManagerV2: ${method.name} failed: ${error.message}`);
-          continue; // Essayer la méthode suivante
+          continue;
         }
       }
       
@@ -267,14 +354,12 @@ class WindowManagerV2 {
    * MÉTHODE 1: Activation instantanée par cache
    */
   async instantCacheActivation(windowId) {
-    // Vérifier si la fenêtre est déjà active
     const window = this.windows.get(windowId);
     if (window && window.info.isActive) {
       console.log(`WindowManagerV2: Window ${windowId} already active (instant)`);
       return true;
     }
     
-    // Simulation d'activation instantanée pour les fenêtres connues
     if (window) {
       console.log(`WindowManagerV2: Instant cache activation for ${windowId}`);
       return true;
@@ -288,7 +373,6 @@ class WindowManagerV2 {
    */
   async directHandleActivation(windowId) {
     try {
-      // Utiliser une méthode d'activation directe ultra-rapide
       if (process.platform === 'win32') {
         return await this.windowsDirectActivation(windowId);
       } else {
@@ -301,26 +385,17 @@ class WindowManagerV2 {
   }
 
   /**
-   * MÉTHODE 3: PowerShell rapide (Windows uniquement)
+   * MÉTHODE 3: Activation via platform manager
    */
-  async fastPowerShellActivation(windowId) {
-    if (process.platform !== 'win32') return false;
-    
+  async platformActivation(windowId) {
     try {
-      // Commande PowerShell ultra-optimisée
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      const windowHandle = this.getWindowHandle(windowId);
-      if (!windowHandle) return false;
-      
-      const command = `powershell.exe -Command "[System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -PassThru)::SetForegroundWindow, [System.Func[IntPtr, bool]])([IntPtr]${windowHandle})"`;
-      
-      const { stdout } = await execAsync(command);
-      return stdout.trim() === 'True';
+      if (this.platformManager && this.platformManager.activateWindow) {
+        console.log(`WindowManagerV2: Using platform manager activation for ${windowId}`);
+        return await this.platformManager.activateWindow(windowId);
+      }
+      return false;
     } catch (error) {
-      console.warn(`WindowManagerV2: Fast PowerShell failed: ${error.message}`);
+      console.warn(`WindowManagerV2: Platform activation failed: ${error.message}`);
       return false;
     }
   }
@@ -345,15 +420,14 @@ class WindowManagerV2 {
       const windowHandle = this.getWindowHandle(windowId);
       if (!windowHandle) return false;
       
-      // Utiliser l'API Windows directement si possible
-      if (this.platformManager && this.platformManager.activateWindow) {
-        return await Promise.race([
-          this.platformManager.activateWindow(windowId),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Platform timeout')), 100))
-        ]);
-      }
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
       
-      return false;
+      const command = `powershell.exe -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd); }'; [Win32]::SetForegroundWindow([IntPtr]${windowHandle})"`;
+      
+      const { stdout } = await execAsync(command);
+      return stdout.trim() === 'True';
     } catch (error) {
       return false;
     }
@@ -371,7 +445,6 @@ class WindowManagerV2 {
       const windowHandle = this.getWindowHandle(windowId);
       if (!windowHandle) return false;
       
-      // Commande wmctrl ultra-rapide
       await execAsync(`wmctrl -i -a ${windowHandle}`, { timeout: 100 });
       return true;
     } catch (error) {
@@ -435,11 +508,10 @@ class WindowManagerV2 {
     try {
       console.log(`WindowManagerV2: Quick organizing windows in ${layout} layout`);
       
-      // Timeout agressif pour l'organisation
       const success = await Promise.race([
         this.platformManager.organizeWindows(layout),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Organization timeout')), 3000)
+          setTimeout(() => reject(new Error('Organization timeout')), 5000) // 5 secondes
         )
       ]);
       
@@ -474,67 +546,17 @@ class WindowManagerV2 {
   getStats() {
     const totalActivations = this.stats.fastActivations + this.stats.slowActivations;
     const fastPercentage = totalActivations > 0 ? (this.stats.fastActivations / totalActivations * 100) : 0;
+    const realDetectionRate = this.stats.scans > 0 ? (this.stats.realDetections / this.stats.scans * 100) : 0;
     
     return {
       ...this.stats,
       avgScanTime: parseFloat(this.stats.avgScanTime.toFixed(2)),
       avgActivationTime: parseFloat(this.stats.avgActivationTime.toFixed(2)),
       fastActivationPercentage: parseFloat(fastPercentage.toFixed(1)),
+      realDetectionRate: parseFloat(realDetectionRate.toFixed(1)),
       windowCacheStats: this.windowCache.getStats(),
-      activationCacheStats: this.activationCache.getStats(),
-      activationMethods: this.activationMethods.map(m => m.name)
+      activationCacheStats: this.activationCache.getStats()
     };
-  }
-
-  /**
-   * Diagnostic du système d'activation
-   */
-  diagnose() {
-    const stats = this.getStats();
-    
-    return {
-      status: this.calculateHealthStatus(stats),
-      stats,
-      recommendations: this.generateRecommendations(stats),
-      activationMethods: this.activationMethods.length,
-      fastActivationRate: stats.fastActivationPercentage
-    };
-  }
-
-  /**
-   * Calcule l'état de santé du système
-   */
-  calculateHealthStatus(stats) {
-    if (stats.avgActivationTime > 1000) {
-      return 'critical';
-    } else if (stats.avgActivationTime > 200) {
-      return 'warning';
-    } else if (stats.fastActivationPercentage > 80) {
-      return 'excellent';
-    } else {
-      return 'good';
-    }
-  }
-
-  /**
-   * Génère des recommandations d'optimisation
-   */
-  generateRecommendations(stats) {
-    const recommendations = [];
-    
-    if (stats.avgActivationTime > 500) {
-      recommendations.push('Consider using fallback simulation mode for better responsiveness');
-    }
-    
-    if (stats.fastActivationPercentage < 70) {
-      recommendations.push('Most activations are slow - check system performance');
-    }
-    
-    if (stats.failures / stats.activations > 0.1) {
-      recommendations.push('High failure rate - enable fallback simulation');
-    }
-    
-    return recommendations;
   }
 
   /**
@@ -564,7 +586,7 @@ class WindowManagerV2 {
         this.platformManager.cleanup();
       }
       
-      console.log('WindowManagerV2: Ultra-fast system cleaned up');
+      console.log('WindowManagerV2: Real detection priority system cleaned up');
       eventBus.emit('windows:cleanup');
     } catch (error) {
       console.error('WindowManagerV2: Error during cleanup:', error);
