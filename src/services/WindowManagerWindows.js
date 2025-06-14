@@ -5,6 +5,7 @@ const execAsync = promisify(exec);
 /**
  * WindowManagerWindows v2.3 - FIXED: Corrected detection patterns for Dofus windows
  * CRITICAL FIXES: Updated to detect UnityWndClass and proper executable patterns
+ * NEW FIX: Window activation without resizing
  */
 class WindowManagerWindows {
   constructor() {
@@ -505,13 +506,13 @@ class WindowManagerWindows {
   }
 
   /**
-   * FIXED: Direct window activation with corrected PowerShell syntax
+   * FIXED: Window activation WITHOUT resizing - only brings window to front
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
     
     try {
-      console.log(`WindowManagerWindows: Activating window ${windowId}`);
+      console.log(`WindowManagerWindows: Activating window ${windowId} (NO RESIZE)`);
       
       // Get window handle with validation
       const handle = this.handleMapping.get(windowId);
@@ -532,8 +533,8 @@ class WindowManagerWindows {
         }
       }
       
-      // FIXED: Corrected PowerShell activation command with proper escaping
-      const success = await this.executePowerShellActivation(handle);
+      // FIXED: Activation WITHOUT resizing - only SetForegroundWindow and ShowWindow with SW_RESTORE
+      const success = await this.executePowerShellActivationNoResize(handle);
       
       const duration = Date.now() - startTime;
       this.updateActivationStats(duration);
@@ -541,7 +542,7 @@ class WindowManagerWindows {
       if (success) {
         this.activationCache.set(cacheKey, now);
         this.updateActiveState(windowId);
-        console.log(`WindowManagerWindows: Successfully activated ${windowId} in ${duration}ms`);
+        console.log(`WindowManagerWindows: Successfully activated ${windowId} in ${duration}ms (NO RESIZE)`);
         return true;
       } else {
         console.warn(`WindowManagerWindows: Activation failed for ${windowId}`);
@@ -557,12 +558,12 @@ class WindowManagerWindows {
   }
 
   /**
-   * NEW: Separated PowerShell activation with proper error handling
+   * NEW: PowerShell activation WITHOUT resizing - only brings window to front
    */
-  async executePowerShellActivation(handle) {
+  async executePowerShellActivationNoResize(handle) {
     try {
-      // CORRECTED: Fixed PowerShell syntax with proper DLL import and error handling
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'; $handle = [IntPtr]${handle}; $result1 = [Win32]::ShowWindow($handle, 9); $result2 = [Win32]::SetForegroundWindow($handle); Write-Output ($result1 -and $result2) } catch { Write-Error $_.Exception.Message; Write-Output 'False' }"`;
+      // FIXED: Only use SetForegroundWindow and ShowWindow with SW_RESTORE (9) to bring to front without resizing
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32Activate { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport(\\"user32.dll\\")] public static extern bool IsIconic(IntPtr hWnd); }'; $handle = [IntPtr]${handle}; $isMinimized = [Win32Activate]::IsIconic($handle); if ($isMinimized) { $result1 = [Win32Activate]::ShowWindow($handle, 9); } else { $result1 = $true; } $result2 = [Win32Activate]::SetForegroundWindow($handle); Write-Output ($result1 -and $result2) } catch { Write-Error $_.Exception.Message; Write-Output 'False' }"`;
       
       const { stdout, stderr } = await execAsync(command, { 
         timeout: 800, // Reduced timeout for faster activation
