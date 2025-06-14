@@ -340,8 +340,8 @@ src/
 │   ├── CacheManager.js       # Intelligent caching system
 │   └── PerformanceMonitor.js # Real-time performance monitoring
 ├── services/                  # Enhanced services
-│   ├── ShortcutManagerV2.js  # Ultra-fast shortcut management
-│   ├── WindowManagerV2.js    # Optimized window management
+│   ├── ShortcutManager.js  # Ultra-fast shortcut management
+│   ├── WindowManager.js    # Optimized window management
 │   ├── NotificationManager.js # Enhanced user feedback
 │   ├── ShortcutConfigManager.js # Character-based persistence
 │   └── LanguageManager.js    # Internationalization

@@ -3,8 +3,8 @@ const path = require('path');
 const Store = require('electron-store');
 
 // Import v2.0 services
-const ShortcutManagerV2 = require('./services/ShortcutManager');
-const WindowManagerV2 = require('./services/WindowManager');
+const ShortcutManager = require('./services/ShortcutManager');
+const WindowManager = require('./services/WindowManager');
 const ShortcutConfigManager = require('./services/ShortcutConfigManager');
 const LanguageManager = require('./services/LanguageManager');
 const NotificationManager = require('./services/NotificationManager');
@@ -20,8 +20,8 @@ class DofusOrganizerV2 {
     this.mainWindow = null;
     this.tray = null;
     this.dockWindow = null;
-    this.windowManager = new WindowManagerV2();
-    this.shortcutManager = new ShortcutManagerV2();
+    this.windowManager = new WindowManager();
+    this.shortcutManager = new ShortcutManager();
     this.languageManager = new LanguageManager();
     this.notificationManager = new NotificationManager();
     this.isConfiguring = false;

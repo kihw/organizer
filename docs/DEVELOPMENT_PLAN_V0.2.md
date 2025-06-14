@@ -19,7 +19,7 @@
 #### 1.1 ShortcutManager v2.0
 ```javascript
 // Nouvelle architecture événementielle
-class ShortcutManagerV2 {
+class ShortcutManager {
   constructor() {
     this.eventBus = new EventBus();
     this.shortcutCache = new Map();
@@ -44,7 +44,7 @@ class ShortcutManagerV2 {
 
 #### 1.2 WindowManager Optimisé
 ```javascript
-class WindowManagerV2 {
+class WindowManager {
   constructor() {
     this.windowCache = new Map();
     this.connectionPool = new ConnectionPool();
