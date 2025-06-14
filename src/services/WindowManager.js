@@ -3,18 +3,18 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 const CacheManager = require('../core/CacheManager');
 
 /**
- * WindowManager v2.3 - CRITICAL FIX: Ensure proper data return and synchronization
- * FIXED: Guarantee that detected windows are properly returned to the interface
+ * WindowManager v2.4 - NO TIMEOUT: Remove timeout that was causing false failures
+ * CRITICAL FIX: Let PowerShell take the time it needs without timeout interference
  */
 class WindowManager {
   constructor() {
     this.windows = new Map();
-    this.windowCache = new CacheManager({ maxSize: 50, defaultTTL: 2000 }); // Reduced TTL for faster updates
+    this.windowCache = new CacheManager({ maxSize: 50, defaultTTL: 2000 });
     this.activationCache = new CacheManager({ maxSize: 20, defaultTTL: 500 });
     this.isScanning = false;
     this.lastSuccessfulScan = 0;
     this.consecutiveFailures = 0;
-    this.lastDetectedWindows = []; // CRITICAL: Store last detected windows
+    this.lastDetectedWindows = [];
     this.stats = {
       scans: 0,
       activations: 0,
@@ -25,10 +25,9 @@ class WindowManager {
       successRate: 100
     };
 
-    // Direct platform manager - no fallbacks
     this.platformManager = this.createPlatformManager();
 
-    console.log('WindowManager: Initialized with CRITICAL data return fix');
+    console.log('WindowManager: Initialized with NO TIMEOUT for reliable activation');
   }
 
   /**
@@ -69,17 +68,13 @@ class WindowManager {
 
     try {
       console.log('WindowManager: CRITICAL FIX - Starting guaranteed detection...');
-
-      // CRITICAL: Always try fresh detection, ignore cache for now
       console.log('WindowManager: Bypassing cache for guaranteed fresh detection');
 
-      // Fail-fast if no platform manager
       if (!this.platformManager) {
         console.error('WindowManager: No platform manager - returning last detected windows');
         return this.lastDetectedWindows;
       }
 
-      // Prevent concurrent scans with simple lock
       if (this.isScanning) {
         console.log('WindowManager: Scan in progress - returning last detected windows');
         return this.lastDetectedWindows;
@@ -90,15 +85,12 @@ class WindowManager {
 
       console.log('WindowManager: Starting platform detection with guaranteed return...');
 
-      // CRITICAL FIX: Direct platform call with proper error handling
       const windows = await this.performGuaranteedDetection();
 
-      // CRITICAL: Always update last detected windows
       if (windows && Array.isArray(windows)) {
         this.lastDetectedWindows = windows;
         console.log(`WindowManager: CRITICAL FIX - Updated lastDetectedWindows with ${windows.length} windows`);
         
-        // Cache the result
         this.windowCache.set('windows', windows);
         this.lastSuccessfulScan = Date.now();
         this.consecutiveFailures = 0;
@@ -118,7 +110,6 @@ class WindowManager {
       this.stats.failures++;
       this.consecutiveFailures++;
       
-      // CRITICAL: Always return something, even if it's the last detected windows
       console.log(`WindowManager: Error fallback - returning ${this.lastDetectedWindows.length} last detected windows`);
       return this.lastDetectedWindows;
     } finally {
@@ -133,24 +124,14 @@ class WindowManager {
     try {
       console.log('WindowManager: Performing guaranteed platform detection...');
 
-      // CRITICAL: Increased timeout and better error handling
-      const timeout = 5000; // 5 seconds timeout
-
-      const windows = await Promise.race([
-        this.platformManager.getDofusWindows(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Detection timeout (${timeout}ms)`)), timeout)
-        )
-      ]);
+      // REMOVED: No timeout - let platform manager take the time it needs
+      const windows = await this.platformManager.getDofusWindows();
 
       console.log(`WindowManager: Platform detection returned ${windows ? windows.length : 'null'} windows`);
-
-      // CRITICAL: Validate and ensure we return an array
       return this.validateAndEnsureArray(windows);
 
     } catch (error) {
       console.warn('WindowManager: Platform detection failed:', error.message);
-      // Return empty array instead of null/undefined
       return [];
     }
   }
@@ -169,7 +150,6 @@ class WindowManager {
       return [];
     }
 
-    // Basic validation - only check essential fields
     const validWindows = windows.filter(window => 
       window && 
       window.id && 
@@ -183,7 +163,7 @@ class WindowManager {
   }
 
   /**
-   * CRITICAL FIX: Direct activation with minimal overhead
+   * NO TIMEOUT: Direct activation without timeout interference
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
@@ -194,7 +174,6 @@ class WindowManager {
         return false;
       }
 
-      // Ultra-fast cache check
       const cacheKey = `act_${windowId}`;
       if (this.activationCache.get(cacheKey)) {
         console.log(`WindowManager: Recent activation cached for ${windowId}`);
@@ -203,44 +182,36 @@ class WindowManager {
 
       this.stats.activations++;
 
-      // Fail-fast if no platform manager
       if (!this.platformManager) {
         console.error('WindowManager: No platform manager for activation');
         return false;
       }
 
-      console.log(`WindowManager: Fast-activating window ${windowId}`);
+      console.log(`WindowManager: NO TIMEOUT activation for ${windowId}`);
 
-      // Direct platform activation with aggressive timeout
-      const success = await Promise.race([
-        this.platformManager.activateWindow(windowId),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Activation timeout')), 800)
-        )
-      ]);
+      // REMOVED: No timeout - let platform manager take the time it needs
+      const success = await this.platformManager.activateWindow(windowId);
 
       const duration = Date.now() - startTime;
 
       if (success) {
-        // Cache successful activation
         this.activationCache.set(cacheKey, true);
         this.updateActivationStats(duration, true);
         this.updateActiveStateMinimal(windowId);
 
-        // Emit event for monitoring
         eventBus.emit('window:activated', { windowId, duration });
-        console.log(`WindowManager: Successfully activated ${windowId} in ${duration}ms`);
+        console.log(`WindowManager: NO TIMEOUT activation SUCCESS for ${windowId} in ${duration}ms`);
         return true;
       } else {
         this.updateActivationStats(duration, false);
-        console.warn(`WindowManager: Failed to activate ${windowId}`);
+        console.warn(`WindowManager: NO TIMEOUT activation FAILED for ${windowId}`);
         eventBus.emit('window:activation_failed', { windowId });
         return false;
       }
 
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`WindowManager: Activation error for ${windowId}:`, error.message);
+      console.error(`WindowManager: NO TIMEOUT activation error for ${windowId}:`, error.message);
       this.updateActivationStats(duration, false);
       return false;
     }
@@ -250,14 +221,12 @@ class WindowManager {
    * MINIMAL: Update active state with minimal processing
    */
   updateActiveStateMinimal(activeWindowId) {
-    // Update in lastDetectedWindows
     this.lastDetectedWindows.forEach(window => {
       if (window && window.id) {
         window.isActive = window.id === activeWindowId;
       }
     });
 
-    // Also update in windows map if it exists
     for (const [windowId, windowData] of this.windows) {
       if (windowData && windowData.info) {
         windowData.info.isActive = windowId === activeWindowId;
@@ -279,13 +248,8 @@ class WindowManager {
 
       console.log(`WindowManager: Organizing windows in ${layout} layout`);
 
-      // Direct delegation with timeout
-      const success = await Promise.race([
-        this.platformManager.organizeWindows(layout),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Organization timeout')), 5000)
-        )
-      ]);
+      // REMOVED: No timeout for organization
+      const success = await this.platformManager.organizeWindows(layout);
 
       const duration = Date.now() - startTime;
 
@@ -385,7 +349,6 @@ class WindowManager {
       const duration = Date.now() - startTime;
       console.log(`WindowManager: Cleanup completed in ${duration}ms`);
       
-      // Final stats
       const finalStats = this.getStats();
       console.log('WindowManager: Final performance stats:', finalStats);
 
@@ -419,7 +382,7 @@ class WindowManager {
     if (stats.avgScanTime > 100 || stats.avgActivationTime > 200) {
       return 'degraded';
     }
-    if (timeSinceLastScan > 30000) { // 30 seconds
+    if (timeSinceLastScan > 30000) {
       return 'stale';
     }
     return 'healthy';

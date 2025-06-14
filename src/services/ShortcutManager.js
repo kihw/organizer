@@ -4,38 +4,33 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 const CacheManager = require('../core/CacheManager');
 
 /**
- * ShortcutManager v2.3 - ULTRA-OPTIMIZED: Direct activation with parallel processing
- * CRITICAL FIXES: Removed sequential queue bottleneck, implemented parallel processing
+ * ShortcutManager v2.4 - TIMEOUT REMOVED: No more activation timeouts
+ * CRITICAL FIX: Remove timeout that was causing false failures
  */
 class ShortcutManager {
   constructor() {
     this.shortcuts = new Map();
     this.active = false;
     this.registeredAccelerators = new Set();
-    this.cache = new CacheManager({ maxSize: 100, defaultTTL: 300000 }); // Reduced cache size
+    this.cache = new CacheManager({ maxSize: 100, defaultTTL: 300000 });
     this.conflictResolver = new Map();
     
-    // REMOVED: Problematic sequential queue system
-    // NEW: Direct activation with concurrency control
+    // REMOVED: Timeout system that was causing false failures
     this.activeConcurrentActivations = 0;
     this.maxConcurrentActivations = 3;
-    this.activationTimeouts = new Map();
     
     this.stats = {
       activations: 0,
       failures: 0,
       conflicts: 0,
       avgActivationTime: 0,
-      concurrentActivations: 0,
-      timeouts: 0
+      concurrentActivations: 0
     };
 
-    // Optimized cache cleanup - less frequent
-    this.cache.startAutoCleanup(300000); // 5 minutes
+    this.cache.startAutoCleanup(300000);
 
-    console.log('ShortcutManager: Initialized with ULTRA-OPTIMIZED parallel processing');
+    console.log('ShortcutManager: Initialized with TIMEOUT REMOVED for reliable activation');
 
-    // Performance monitoring
     eventBus.on('performance:alert', (alert) => {
       if (alert.operation.startsWith('shortcut_')) {
         this.handlePerformanceAlert(alert);
@@ -50,21 +45,18 @@ class ShortcutManager {
     const startTime = Date.now();
 
     try {
-      // Fast removal of existing shortcut
       await this.removeWindowShortcut(windowId);
 
       if (!shortcut || !callback) {
         return false;
       }
 
-      // Ultra-fast validation and conversion
       const accelerator = this.convertShortcutToAccelerator(shortcut);
       if (!accelerator) {
         console.warn(`ShortcutManager: Invalid shortcut format: ${shortcut}`);
         return false;
       }
 
-      // Quick conflict check
       const conflict = this.checkConflictFast(accelerator, windowId);
       if (conflict) {
         console.warn(`ShortcutManager: Shortcut conflict: ${accelerator} used by ${conflict}`);
@@ -72,7 +64,6 @@ class ShortcutManager {
         return false;
       }
 
-      // Direct registration without retry overhead
       const success = await this.registerGlobalShortcutFast(accelerator, windowId, callback);
 
       if (success) {
@@ -85,8 +76,6 @@ class ShortcutManager {
         });
 
         this.registeredAccelerators.add(accelerator);
-
-        // Minimal caching
         this.cache.set(`shortcut_${windowId}`, { accelerator, original: shortcut });
 
         const duration = Date.now() - startTime;
@@ -124,7 +113,7 @@ class ShortcutManager {
   }
 
   /**
-   * ULTRA-FAST: Direct shortcut execution with parallel processing
+   * NO TIMEOUT: Direct shortcut execution without timeout interference
    */
   executeShortcutDirect(windowId, accelerator, callback) {
     // Check concurrency limit
@@ -136,64 +125,45 @@ class ShortcutManager {
     this.activeConcurrentActivations++;
     this.stats.concurrentActivations = Math.max(this.stats.concurrentActivations, this.activeConcurrentActivations);
 
-    // Execute immediately in parallel
-    this.processActivationDirect(windowId, accelerator, callback)
+    // Execute immediately without timeout
+    this.processActivationNoTimeout(windowId, accelerator, callback)
       .finally(() => {
         this.activeConcurrentActivations--;
       });
   }
 
   /**
-   * ULTRA-FAST: Direct activation processing without queue overhead
+   * NO TIMEOUT: Direct activation processing without timeout interference
    */
-  async processActivationDirect(windowId, accelerator, callback) {
+  async processActivationNoTimeout(windowId, accelerator, callback) {
     const startTime = Date.now();
 
     try {
-      console.log(`ShortcutManager: Direct activation ${accelerator} for ${windowId}`);
+      console.log(`ShortcutManager: NO TIMEOUT activation ${accelerator} for ${windowId}`);
 
-      // Update stats
       const shortcutInfo = this.shortcuts.get(windowId);
       if (shortcutInfo) {
         shortcutInfo.activationCount++;
       }
       this.stats.activations++;
 
-      // Set timeout for activation
-      const timeoutId = setTimeout(() => {
-        console.warn(`ShortcutManager: Activation timeout for ${windowId}`);
-        this.stats.timeouts++;
-      }, 100); // 100ms timeout
-
-      this.activationTimeouts.set(windowId, timeoutId);
-
-      // Execute callback directly
+      // REMOVED: No timeout system - let PowerShell take the time it needs
       await callback();
-
-      // Clear timeout
-      clearTimeout(timeoutId);
-      this.activationTimeouts.delete(windowId);
 
       const duration = Date.now() - startTime;
       this.updateAverageActivationTime(duration);
 
-      // Emit success event
       eventBus.emit('shortcut:activated', {
         windowId,
         accelerator,
         duration
       });
 
+      console.log(`ShortcutManager: NO TIMEOUT activation SUCCESS for ${windowId} in ${duration}ms`);
+
     } catch (error) {
       console.error('ShortcutManager: Activation error:', error);
       this.stats.failures++;
-
-      // Clear timeout on error
-      const timeoutId = this.activationTimeouts.get(windowId);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        this.activationTimeouts.delete(windowId);
-      }
 
       eventBus.emit('shortcut:error', {
         windowId,
@@ -214,26 +184,19 @@ class ShortcutManager {
 
   /**
    * ULTRA-FAST: Optimized accelerator conversion with minimal string processing
-   * FIXED: Renamed from convertShortcutToAcceleratorFast to match main.js calls
    */
   convertShortcutToAccelerator(shortcut) {
     if (!shortcut) return '';
 
-    // Quick cache check
     const cached = this.cache.get(`accel_${shortcut}`);
     if (cached) {
       return cached;
     }
 
-    // Fast normalization
     const normalized = shortcut.trim().replace(/\s*\+\s*/g, '+');
-    
-    // Fast conversion with pre-compiled mappings
     const result = this.fastConvertParts(normalized);
     
-    // Cache result
     this.cache.set(`accel_${shortcut}`, result);
-    
     return result;
   }
 
@@ -241,7 +204,6 @@ class ShortcutManager {
    * OPTIMIZED: Pre-compiled fast conversion
    */
   fastConvertParts(shortcut) {
-    // Fast lookup tables
     const modifiers = {
       'ctrl': 'CommandOrControl',
       'control': 'CommandOrControl', 
@@ -290,14 +252,6 @@ class ShortcutManager {
     try {
       const shortcutInfo = this.shortcuts.get(windowId);
       if (shortcutInfo) {
-        // Clear any pending timeout
-        const timeoutId = this.activationTimeouts.get(windowId);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          this.activationTimeouts.delete(windowId);
-        }
-
-        // Unregister global shortcut
         try {
           globalShortcut.unregister(shortcutInfo.accelerator);
           this.registeredAccelerators.delete(shortcutInfo.accelerator);
@@ -305,7 +259,6 @@ class ShortcutManager {
           console.warn(`ShortcutManager: Error unregistering ${shortcutInfo.accelerator}:`, error);
         }
 
-        // Clean up data structures
         this.shortcuts.delete(windowId);
         this.cache.delete(`shortcut_${windowId}`);
 
@@ -347,13 +300,11 @@ class ShortcutManager {
         return { valid: false, reason: 'Invalid format' };
       }
 
-      // Quick conflict check
       const conflict = this.checkConflictFast(accelerator);
       if (conflict) {
         return { valid: false, reason: `Conflict with ${conflict}` };
       }
 
-      // Basic system shortcut check
       const reserved = ['CommandOrControl+C', 'CommandOrControl+V', 'Alt+F4'];
       if (reserved.includes(accelerator)) {
         return { valid: false, reason: 'Reserved system shortcut' };
@@ -373,7 +324,6 @@ class ShortcutManager {
     
     this.active = true;
     
-    // Parallel registration for speed
     const shortcuts = Array.from(this.shortcuts.entries());
     const registrationPromises = shortcuts.map(async ([windowId, info]) => {
       try {
@@ -401,12 +351,6 @@ class ShortcutManager {
     this.active = false;
 
     try {
-      // Clear all timeouts
-      for (const timeoutId of this.activationTimeouts.values()) {
-        clearTimeout(timeoutId);
-      }
-      this.activationTimeouts.clear();
-
       globalShortcut.unregisterAll();
       this.registeredAccelerators.clear();
       
@@ -424,7 +368,6 @@ class ShortcutManager {
     console.warn(`ShortcutManager: Performance alert: ${alert.operation} ${alert.duration}ms`);
 
     if (alert.operation === 'shortcut_activation' && alert.severity === 'critical') {
-      // Reduce concurrency if needed
       if (this.maxConcurrentActivations > 1) {
         this.maxConcurrentActivations--;
         console.log(`ShortcutManager: Reduced max concurrency to ${this.maxConcurrentActivations}`);
@@ -442,7 +385,6 @@ class ShortcutManager {
       registeredAccelerators: this.registeredAccelerators.size,
       activeConcurrentActivations: this.activeConcurrentActivations,
       maxConcurrentActivations: this.maxConcurrentActivations,
-      pendingTimeouts: this.activationTimeouts.size,
       cacheStats: this.cache.getStats(),
       avgActivationTime: parseFloat(this.stats.avgActivationTime.toFixed(2)),
       successRate: this.calculateSuccessRate()
@@ -481,27 +423,15 @@ class ShortcutManager {
     const startTime = Date.now();
 
     try {
-      // Clear all timeouts first
-      for (const timeoutId of this.activationTimeouts.values()) {
-        clearTimeout(timeoutId);
-      }
-      this.activationTimeouts.clear();
-
-      // Unregister all shortcuts
       globalShortcut.unregisterAll();
-
-      // Clean up data structures
       this.shortcuts.clear();
       this.registeredAccelerators.clear();
-
-      // Stop cache cleanup
       this.cache.stopAutoCleanup();
       this.cache.clear();
 
       const duration = Date.now() - startTime;
       console.log(`ShortcutManager: Cleanup completed in ${duration}ms`);
 
-      // Final stats
       const finalStats = this.getStats();
       console.log('ShortcutManager: Final stats:', finalStats);
 
