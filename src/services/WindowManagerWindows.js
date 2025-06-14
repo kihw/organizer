@@ -3,8 +3,8 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 /**
- * WindowManagerWindows v2.8 - SIMPLIFIED: Remove all broken functions, keep only what works
- * CRITICAL FIXES: Simplified activation, removed complex PowerShell commands
+ * WindowManagerWindows v2.9 - REAL ACTIVATION: Implement working window activation
+ * CRITICAL FIX: Real window activation using simple Windows API calls
  */
 class WindowManagerWindows {
   constructor() {
@@ -65,7 +65,7 @@ class WindowManagerWindows {
       'launcher'
     ];
     
-    console.log('WindowManagerWindows: Initialized with SIMPLIFIED working functions only');
+    console.log('WindowManagerWindows: Initialized with REAL WORKING activation');
   }
 
   getDofusClasses() {
@@ -529,13 +529,13 @@ class WindowManagerWindows {
   }
 
   /**
-   * SIMPLIFIED: Window activation - REMOVED BROKEN POWERSHELL
+   * REAL ACTIVATION: Working window activation using Windows API
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
     
     try {
-      console.log(`WindowManagerWindows: SIMPLIFIED activation for ${windowId}`);
+      console.log(`WindowManagerWindows: REAL activation for ${windowId}`);
       
       // Get window handle
       const handle = this.handleMapping.get(windowId);
@@ -544,19 +544,135 @@ class WindowManagerWindows {
         return false;
       }
       
-      // SIMPLIFIED: Just return true for now - activation is broken
-      // TODO: Implement working activation method later
-      console.log(`WindowManagerWindows: MOCK activation for ${windowId} - returning true`);
+      // Check activation cache for performance
+      const cacheKey = handle.toString();
+      const now = Date.now();
+      
+      if (this.activationCache.has(cacheKey)) {
+        const lastActivation = this.activationCache.get(cacheKey);
+        if (now - lastActivation < 500) { // 500ms cooldown
+          console.log(`WindowManagerWindows: Recent activation cached for ${windowId}`);
+          return true;
+        }
+      }
+      
+      // REAL ACTIVATION: Use simple Windows API calls
+      const success = await this.executeRealWindowActivation(handle);
       
       const duration = Date.now() - startTime;
       this.updateActivationStats(duration);
-      this.updateActiveState(windowId);
       
-      return true; // Mock success
+      if (success) {
+        this.activationCache.set(cacheKey, now);
+        this.updateActiveState(windowId);
+        console.log(`WindowManagerWindows: REAL activation SUCCESS for ${windowId} in ${duration}ms`);
+        return true;
+      } else {
+        console.warn(`WindowManagerWindows: REAL activation FAILED for ${windowId}`);
+        this.performanceStats.errors++;
+        return false;
+      }
       
     } catch (error) {
-      console.error(`WindowManagerWindows: Activation error for ${windowId}:`, error.message);
+      console.error(`WindowManagerWindows: Real activation error for ${windowId}:`, error.message);
       this.performanceStats.errors++;
+      return false;
+    }
+  }
+
+  /**
+   * REAL ACTIVATION: Simple and reliable Windows API activation
+   */
+  async executeRealWindowActivation(handle) {
+    try {
+      console.log(`WindowManagerWindows: Executing REAL activation for handle ${handle}`);
+      
+      // Method 1: Try simple SetForegroundWindow
+      const success1 = await this.trySimpleActivation(handle);
+      if (success1) {
+        console.log('WindowManagerWindows: Simple activation SUCCESS');
+        return true;
+      }
+      
+      // Method 2: Try with ShowWindow first
+      const success2 = await this.tryShowWindowActivation(handle);
+      if (success2) {
+        console.log('WindowManagerWindows: ShowWindow activation SUCCESS');
+        return true;
+      }
+      
+      // Method 3: Try with BringWindowToTop
+      const success3 = await this.tryBringToTopActivation(handle);
+      if (success3) {
+        console.log('WindowManagerWindows: BringToTop activation SUCCESS');
+        return true;
+      }
+      
+      console.warn('WindowManagerWindows: All activation methods failed');
+      return false;
+      
+    } catch (error) {
+      console.error('WindowManagerWindows: Real activation execution failed:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Method 1: Simple SetForegroundWindow
+   */
+  async trySimpleActivation(handle) {
+    try {
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; [Win32]::SetForegroundWindow([IntPtr]${handle})"`;
+      
+      const { stdout } = await execAsync(command, { 
+        timeout: 1000,
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      
+      return stdout && stdout.trim().toLowerCase() === 'true';
+    } catch (error) {
+      console.warn('WindowManagerWindows: Simple activation failed:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Method 2: ShowWindow + SetForegroundWindow
+   */
+  async tryShowWindowActivation(handle) {
+    try {
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; $h = [IntPtr]${handle}; $r1 = [Win32]::ShowWindow($h, 9); $r2 = [Win32]::SetForegroundWindow($h); Write-Output ($r1 -and $r2)"`;
+      
+      const { stdout } = await execAsync(command, { 
+        timeout: 1000,
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      
+      return stdout && stdout.trim().toLowerCase() === 'true';
+    } catch (error) {
+      console.warn('WindowManagerWindows: ShowWindow activation failed:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Method 3: BringWindowToTop + SetForegroundWindow
+   */
+  async tryBringToTopActivation(handle) {
+    try {
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool BringWindowToTop(IntPtr hWnd); [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; $h = [IntPtr]${handle}; $r1 = [Win32]::BringWindowToTop($h); $r2 = [Win32]::SetForegroundWindow($h); Write-Output ($r1 -and $r2)"`;
+      
+      const { stdout } = await execAsync(command, { 
+        timeout: 1000,
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      
+      return stdout && stdout.trim().toLowerCase() === 'true';
+    } catch (error) {
+      console.warn('WindowManagerWindows: BringToTop activation failed:', error.message);
       return false;
     }
   }
