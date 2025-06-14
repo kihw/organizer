@@ -366,13 +366,20 @@ try {
       
       let rawWindows = [];
       
+      // Try PowerShell first if available
       if (this.psScriptReady && this.psScriptPath) {
         rawWindows = await this.getWindowsWithPowerShell();
       }
       
-      // If PowerShell failed or returned no results, try fallback methods
+      // If PowerShell failed or returned no results, try alternative method
       if (rawWindows.length === 0) {
-        console.log('WindowManagerWindows: PowerShell returned no windows, trying fallback methods...');
+        console.log('WindowManagerWindows: PowerShell returned no windows, trying alternative method...');
+        rawWindows = await this.getWindowsWithAlternativeMethod();
+      }
+      
+      // If still no windows, try WMIC fallback
+      if (rawWindows.length === 0) {
+        console.log('WindowManagerWindows: Alternative method returned no windows, trying WMIC...');
         rawWindows = await this.getWindowsWithWmic();
       }
       
@@ -424,6 +431,54 @@ try {
       return [];
     } catch (error) {
       console.error('WindowManagerWindows: PowerShell command failed:', error);
+      return [];
+    }
+  }
+
+  async getWindowsWithAlternativeMethod() {
+    try {
+      console.log('WindowManagerWindows: Using alternative PowerShell method...');
+      
+      // Use a simpler PowerShell command to get Dofus windows
+      const command = `powershell.exe -Command "Get-Process | Where-Object { $_.MainWindowTitle -and ($_.ProcessName -like '*Dofus*' -or $_.MainWindowTitle -like '*Dofus*' -or $_.MainWindowTitle -like '*Steamer*' -or $_.MainWindowTitle -like '*Boulonix*') } | ForEach-Object { @{ Handle = $_.MainWindowHandle.ToInt64(); Title = $_.MainWindowTitle; ProcessId = $_.Id; ClassName = 'Unknown'; IsActive = $false; Bounds = @{ X = 0; Y = 0; Width = 800; Height = 600 } } } | ConvertTo-Json"`;
+      
+      const { stdout, stderr } = await execAsync(command, { timeout: 5000 });
+      
+      if (stderr && stderr.trim()) {
+        console.warn('WindowManagerWindows: Alternative PowerShell stderr:', stderr);
+      }
+      
+      if (stdout && stdout.trim() && stdout.trim() !== '[]') {
+        try {
+          const result = JSON.parse(stdout.trim());
+          const windows = Array.isArray(result) ? result : [result];
+          
+          // Filter windows based on game type
+          return windows.filter(window => {
+            if (!window.Title) return false;
+            
+            const title = window.Title.toLowerCase();
+            
+            switch (this.gameType) {
+              case 'dofus2':
+                return title.includes('dofus') && !title.includes('retro') && !title.includes('3');
+              case 'dofus3':
+                return title.includes('dofus') && !title.includes('retro');
+              case 'retro':
+                return title.includes('retro') || title.includes('1.29');
+              default:
+                return title.includes('dofus') || title.includes('steamer') || title.includes('boulonix');
+            }
+          });
+        } catch (parseError) {
+          console.error('WindowManagerWindows: Failed to parse alternative PowerShell output:', parseError);
+          console.log('WindowManagerWindows: Raw output:', stdout);
+        }
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('WindowManagerWindows: Alternative PowerShell method failed:', error);
       return [];
     }
   }
@@ -567,6 +622,12 @@ try {
     const currentWindowIds = new Set();
     
     for (const rawWindow of rawWindows) {
+      // Ensure Handle exists and can be converted to string
+      if (!rawWindow.Handle) {
+        console.warn('WindowManagerWindows: Skipping window with no Handle:', rawWindow);
+        continue;
+      }
+      
       const windowId = rawWindow.Handle.toString();
       currentWindowIds.add(windowId);
       
@@ -579,16 +640,16 @@ try {
       
       const windowInfo = {
         id: windowId,
-        title: rawWindow.Title,
+        title: rawWindow.Title || 'Unknown Window',
         processName: this.extractProcessName(rawWindow.ClassName),
-        className: rawWindow.ClassName,
-        pid: rawWindow.ProcessId.toString(),
+        className: rawWindow.ClassName || 'Unknown',
+        pid: (rawWindow.ProcessId || 0).toString(),
         character: character,
         dofusClass: finalClass,
         customName: this.getStoredCustomName(windowId),
         initiative: this.getStoredInitiative(windowId),
-        isActive: rawWindow.IsActive,
-        bounds: rawWindow.Bounds,
+        isActive: rawWindow.IsActive || false,
+        bounds: rawWindow.Bounds || { X: 0, Y: 0, Width: 800, Height: 600 },
         avatar: this.getClassAvatar(finalClass),
         shortcut: this.getStoredShortcut(windowId),
         enabled: this.getStoredEnabled(windowId)
@@ -620,6 +681,7 @@ try {
     // "Gandalf - Iop - Dofus 3 - Beta"
     // "Legolas - Cra - Dofus 2 - Release"
     // "Gimli - Enutrof - Dofus Retro - 1.29"
+    // "Boulonix - Steamer - 3.1.10.13 - Release"
     
     const parts = title.split(' - ').map(part => part.trim());
     
