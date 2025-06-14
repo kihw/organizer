@@ -3,8 +3,8 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 /**
- * WindowManagerWindows v2.6 - FIXED: Detection timeout and PowerShell errors
- * CRITICAL FIX: Ensure detected windows are properly returned
+ * WindowManagerWindows v2.7 - CRITICAL FIX: Proper window filtering and return
+ * FIXED: Ensure only valid Dofus game windows are returned, not the organizer itself
  */
 class WindowManagerWindows {
   constructor() {
@@ -55,33 +55,17 @@ class WindowManagerWindows {
       'eliotrop': 'eliotrope', 'elio': 'eliotrope', 'hupper': 'huppermage', 'ougi': 'ouginak'
     };
 
-    // FIXED: Title validation patterns
-    this.titleValidationPatterns = [
-      // Format standard: "Personnage - Classe - Version - Release"
-      /^[^-]+ - [^-]+ - [^-]+ - [^-]+$/,
-      
-      // Format avec parenthèses: "Personnage (Classe) - Version"
-      /^[^(]+ \([^)]+\) - .+$/,
-      
-      // Format simple: "Personnage - Classe"
-      /^[^-]+ - [^-]+$/,
-      
-      // Format Dofus avec serveur: "Personnage@Serveur - Classe"
-      /^[^@]+@[^-]+ - .+$/,
-      
-      // Format avec niveau: "Personnage [Niveau] - Classe"
-      /^[^\[]+ \[\d+\] - .+$/
-    ];
-
-    // FIXED: More flexible keywords - include class names
-    this.requiredTitleKeywords = [
-      'dofus', 'steamer', 'boulonix', 'ankama', 'unity', 'retro',
-      // Add all class names as valid keywords
-      ...Object.keys(this.dofusClasses),
-      ...Object.keys(this.classNameMappings)
+    // CRITICAL: Exclude our own application windows
+    this.excludedTitles = [
+      'dofus organizer',
+      'organizer',
+      'configuration',
+      'config',
+      'ankama launcher',
+      'launcher'
     ];
     
-    console.log('WindowManagerWindows: Initialized with FIXED detection and PowerShell optimization');
+    console.log('WindowManagerWindows: Initialized with CRITICAL window filtering fix');
   }
 
   getDofusClasses() {
@@ -98,7 +82,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * FIXED: Fast window detection with proper timeout handling
+   * CRITICAL FIX: Fast window detection that returns proper results
    */
   async getDofusWindows() {
     const startTime = Date.now();
@@ -115,10 +99,10 @@ class WindowManagerWindows {
       }
       this.lastWindowCheck = now;
 
-      console.log('WindowManagerWindows: Starting FIXED Dofus detection...');
+      console.log('WindowManagerWindows: Starting CRITICAL FIX detection...');
       
-      // FIXED: Use optimized detection with proper error handling
-      const windows = await this.detectDofusOptimized();
+      // CRITICAL FIX: Use optimized detection with proper return
+      const windows = await this.detectDofusWithCriticalFix();
       
       if (windows && windows.length > 0) {
         const processedWindows = this.processRawWindows(windows);
@@ -134,7 +118,7 @@ class WindowManagerWindows {
         const duration = Date.now() - startTime;
         this.updateDetectionStats(duration);
         
-        console.log(`WindowManagerWindows: Successfully detected ${processedWindows.length} valid Dofus windows in ${duration}ms`);
+        console.log(`WindowManagerWindows: CRITICAL FIX - Successfully detected ${processedWindows.length} valid Dofus windows in ${duration}ms`);
         return processedWindows;
       }
       
@@ -149,11 +133,11 @@ class WindowManagerWindows {
   }
 
   /**
-   * FIXED: Optimized detection with working PowerShell commands only
+   * CRITICAL FIX: Detection with proper filtering and guaranteed return
    */
-  async detectDofusOptimized() {
+  async detectDofusWithCriticalFix() {
     try {
-      console.log('WindowManagerWindows: Using OPTIMIZED detection methods...');
+      console.log('WindowManagerWindows: Using CRITICAL FIX detection methods...');
       
       let allWindows = [];
       
@@ -180,16 +164,83 @@ class WindowManagerWindows {
       // Remove duplicates based on handle
       const uniqueWindows = this.removeDuplicateWindows(allWindows);
       
-      // FIXED: Apply improved title validation
-      const validatedWindows = this.validateWindowTitlesFixed(uniqueWindows);
+      // CRITICAL FIX: Apply strict filtering for GAME windows only
+      const gameWindows = this.filterGameWindowsOnly(uniqueWindows);
       
-      console.log(`WindowManagerWindows: Found ${allWindows.length} total, ${uniqueWindows.length} unique, ${validatedWindows.length} validated windows`);
-      return validatedWindows;
+      console.log(`WindowManagerWindows: Found ${allWindows.length} total, ${uniqueWindows.length} unique, ${gameWindows.length} game windows`);
+      return gameWindows;
       
     } catch (error) {
       console.error('WindowManagerWindows: All detection methods failed:', error.message);
       return [];
     }
+  }
+
+  /**
+   * CRITICAL: Filter to keep only actual Dofus GAME windows
+   */
+  filterGameWindowsOnly(windows) {
+    const gameWindows = [];
+    
+    for (const window of windows) {
+      if (this.isValidDofusGameWindow(window.Title)) {
+        gameWindows.push(window);
+        console.log(`WindowManagerWindows: ✓ Valid GAME window: "${window.Title}"`);
+      } else {
+        console.log(`WindowManagerWindows: ✗ Excluded non-game window: "${window.Title}"`);
+      }
+    }
+    
+    return gameWindows;
+  }
+
+  /**
+   * CRITICAL: Check if window is a valid Dofus GAME window (not launcher, organizer, etc.)
+   */
+  isValidDofusGameWindow(title) {
+    if (!title || title.trim().length === 0) {
+      return false;
+    }
+    
+    const lowerTitle = title.toLowerCase();
+    
+    // CRITICAL: Exclude our own application and launchers
+    for (const excluded of this.excludedTitles) {
+      if (lowerTitle.includes(excluded)) {
+        console.log(`WindowManagerWindows: Title "${title}" excluded - matches "${excluded}"`);
+        return false;
+      }
+    }
+    
+    // Must contain a valid Dofus class name in the title
+    const hasValidClass = this.containsValidDofusClass(title);
+    if (!hasValidClass) {
+      console.log(`WindowManagerWindows: Title "${title}" rejected - no valid Dofus class found`);
+      return false;
+    }
+    
+    // Must follow character-class pattern
+    const hasCharacterPattern = this.hasValidCharacterPattern(title);
+    if (!hasCharacterPattern) {
+      console.log(`WindowManagerWindows: Title "${title}" rejected - no valid character pattern`);
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * CRITICAL: Check for valid character-class pattern
+   */
+  hasValidCharacterPattern(title) {
+    // Pattern: "Character - Class - ..." or similar
+    const patterns = [
+      /^[^-]+ - [^-]+ - .+$/,  // "Character - Class - Version - Release"
+      /^[^-]+ - [^-]+$/,       // "Character - Class"
+      /^[^@]+@[^-]+ - .+$/,    // "Character@Server - Class"
+    ];
+    
+    return patterns.some(pattern => pattern.test(title));
   }
 
   /**
@@ -210,77 +261,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * FIXED: Improved window title validation that accepts Dofus class names
-   */
-  validateWindowTitlesFixed(windows) {
-    const validatedWindows = [];
-    
-    for (const window of windows) {
-      if (this.isValidDofusTitleFixed(window.Title)) {
-        validatedWindows.push(window);
-        console.log(`WindowManagerWindows: ✓ Valid title: "${window.Title}"`);
-      } else {
-        console.log(`WindowManagerWindows: ✗ Invalid title (rejected): "${window.Title}"`);
-      }
-    }
-    
-    return validatedWindows;
-  }
-
-  /**
-   * FIXED: Check if window title meets Dofus requirements with class name support
-   */
-  isValidDofusTitleFixed(title) {
-    if (!title || title.trim().length === 0) {
-      return false;
-    }
-    
-    const lowerTitle = title.toLowerCase();
-    
-    // Check 1: Must contain at least one required keyword OR a valid Dofus class
-    const hasRequiredKeyword = this.requiredTitleKeywords.some(keyword => 
-      lowerTitle.includes(keyword.toLowerCase())
-    );
-    
-    // FIXED: Also check if title contains a valid Dofus class name
-    const hasValidClass = this.containsValidDofusClass(title);
-    
-    if (!hasRequiredKeyword && !hasValidClass) {
-      console.log(`WindowManagerWindows: Title "${title}" rejected - no required keywords or valid class`);
-      return false;
-    }
-    
-    // Check 2: Must match at least one title pattern OR contain character info
-    const matchesPattern = this.titleValidationPatterns.some(pattern => 
-      pattern.test(title)
-    );
-    
-    const hasCharacterInfo = this.hasCharacterInfo(title);
-    
-    if (!matchesPattern && !hasCharacterInfo) {
-      console.log(`WindowManagerWindows: Title "${title}" rejected - no valid pattern or character info`);
-      return false;
-    }
-    
-    // Check 3: Must not be a generic window title
-    const genericTitles = [
-      'dofus', 'steamer', 'boulonix', 'ankama launcher', 'unity', 'loading'
-    ];
-    
-    const isGeneric = genericTitles.some(generic => 
-      lowerTitle === generic || lowerTitle === generic + '.exe'
-    );
-    
-    if (isGeneric) {
-      console.log(`WindowManagerWindows: Title "${title}" rejected - too generic`);
-      return false;
-    }
-    
-    return true;
-  }
-
-  /**
-   * FIXED: Check if title contains a valid Dofus class name
+   * CRITICAL: Check if title contains a valid Dofus class name
    */
   containsValidDofusClass(title) {
     if (!title) return false;
@@ -307,27 +288,12 @@ class WindowManagerWindows {
   }
 
   /**
-   * Check if title contains character information
-   */
-  hasCharacterInfo(title) {
-    // Look for character-class patterns
-    const characterPatterns = [
-      /-\s*\w+\s*-/, // "Character - Class - ..."
-      /\(\w+\)/, // "Character (Class)"
-      /@\w+/, // "Character@Server"
-      /\[\d+\]/, // "Character [Level]"
-    ];
-    
-    return characterPatterns.some(pattern => pattern.test(title));
-  }
-
-  /**
    * FIXED: Optimized process name detection
    */
   async detectByProcessNameOptimized() {
     try {
       // FIXED: Simplified and reliable PowerShell command
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { ($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*' -or $_.ProcessName -like '*ankama*') -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress"`;
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { ($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*') -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress"`;
       
       const { stdout, stderr } = await execAsync(command, { 
         timeout: 3000, // Increased timeout
@@ -365,7 +331,7 @@ class WindowManagerWindows {
   async detectByWindowTitleOptimized() {
     try {
       // FIXED: Simplified PowerShell command for title detection
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.MainWindowTitle -match '(dofus|steamer|boulonix|ankama|xelor|feca|iop|cra|enutrof|sram|ecaflip|eniripsa|sadida|sacrieur|pandawa|roublard|zobal|eliotrope|huppermage|ouginak|forgelance|osamodas)' -and $_.MainWindowHandle -ne 0 } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress"`;
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.MainWindowTitle -match '(steamer|boulonix|xelor|feca|iop|cra|enutrof|sram|ecaflip|eniripsa|sadida|sacrieur|pandawa|roublard|zobal|eliotrope|huppermage|ouginak|forgelance|osamodas)' -and $_.MainWindowHandle -ne 0 } | ForEach-Object { [PSCustomObject]@{ Id = $_.Id; ProcessName = $_.ProcessName; Title = $_.MainWindowTitle; Handle = $_.MainWindowHandle.ToInt64() } } | ConvertTo-Json -Compress"`;
       
       const { stdout, stderr } = await execAsync(command, { 
         timeout: 3000, // Increased timeout
