@@ -10,6 +10,8 @@ class ConfigRenderer {
         this.dofusClasses = {};
         this.currentShortcutWindowId = null;
         this.currentClassWindowId = null;
+        this.currentShortcut = '';
+        this.currentKeyHandler = null;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -508,7 +510,9 @@ class ConfigRenderer {
         
         if (modal && display) {
             this.currentShortcutWindowId = windowId;
-            display.textContent = window?.shortcut || 'No shortcut';
+            this.currentShortcut = '';
+            display.textContent = window?.shortcut || 'Press any key or combination...';
+            display.classList.add('recording');
             modal.style.display = 'flex';
             
             this.setupShortcutCapture();
@@ -517,47 +521,132 @@ class ConfigRenderer {
 
     setupShortcutCapture() {
         const display = document.getElementById('shortcut-display');
-        let currentShortcut = '';
         
         const keyHandler = (e) => {
             e.preventDefault();
             e.stopPropagation();
             
+            console.log('Key pressed:', e.key, 'Code:', e.code, 'Modifiers:', {
+                ctrl: e.ctrlKey,
+                alt: e.altKey,
+                shift: e.shiftKey,
+                meta: e.metaKey
+            });
+            
+            // Build the shortcut string
             const keys = [];
+            
+            // Add modifiers
             if (e.ctrlKey || e.metaKey) keys.push('Ctrl');
             if (e.altKey) keys.push('Alt');
             if (e.shiftKey) keys.push('Shift');
             
-            if (e.key && !['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
-                keys.push(e.key.toUpperCase());
+            // Handle the main key
+            let mainKey = '';
+            
+            // Special keys mapping
+            const specialKeys = {
+                ' ': 'Space',
+                'Enter': 'Return',
+                'Escape': 'Escape',
+                'Backspace': 'Backspace',
+                'Tab': 'Tab',
+                'Delete': 'Delete',
+                'Insert': 'Insert',
+                'Home': 'Home',
+                'End': 'End',
+                'PageUp': 'PageUp',
+                'PageDown': 'PageDown',
+                'ArrowUp': 'Up',
+                'ArrowDown': 'Down',
+                'ArrowLeft': 'Left',
+                'ArrowRight': 'Right',
+                ';': ';',
+                '=': '=',
+                ',': ',',
+                '.': '.',
+                '/': '/',
+                "'": "'",
+                '`': '`',
+                '[': '[',
+                ']': ']',
+                '\\': '\\'
+            };
+            
+            // Function keys
+            if (e.key.match(/^F\d+$/)) {
+                mainKey = e.key;
+            }
+            // Special keys
+            else if (specialKeys[e.key]) {
+                mainKey = specialKeys[e.key];
+            }
+            // Regular keys (letters, numbers)
+            else if (e.key.length === 1 && e.key.match(/[a-zA-Z0-9]/)) {
+                mainKey = e.key.toUpperCase();
+            }
+            // Other single character keys
+            else if (e.key.length === 1) {
+                mainKey = e.key;
+            }
+            // Skip modifier-only presses
+            else if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+                return;
             }
             
-            if (keys.length > 1) {
-                currentShortcut = keys.join('+');
-                display.textContent = currentShortcut;
-                display.classList.add('recording');
+            // If we have a main key, create the shortcut
+            if (mainKey) {
+                keys.push(mainKey);
+                this.currentShortcut = keys.join('+');
+                display.textContent = this.currentShortcut;
+                display.classList.remove('recording');
+                display.classList.add('captured');
+                
+                console.log('Captured shortcut:', this.currentShortcut);
             }
         };
         
+        // Clean up any existing handler
+        if (this.currentKeyHandler) {
+            document.removeEventListener('keydown', this.currentKeyHandler);
+        }
+        
         document.addEventListener('keydown', keyHandler);
         this.currentKeyHandler = keyHandler;
-        this.currentShortcut = currentShortcut;
+        
+        // Focus the modal to ensure it receives key events
+        const modal = document.getElementById('shortcut-modal');
+        if (modal) {
+            modal.focus();
+        }
     }
 
     async saveShortcut() {
         if (this.currentShortcutWindowId && this.currentShortcut) {
             try {
-                await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindowId, this.currentShortcut);
+                console.log(`Config.js: Saving shortcut ${this.currentShortcut} for window ${this.currentShortcutWindowId}`);
                 
-                // Update local data
-                const window = this.windows.find(w => w.id === this.currentShortcutWindowId);
-                if (window) {
-                    window.shortcut = this.currentShortcut;
-                    this.renderWindows();
+                const success = await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindowId, this.currentShortcut);
+                
+                if (success) {
+                    // Update local data
+                    const window = this.windows.find(w => w.id === this.currentShortcutWindowId);
+                    if (window) {
+                        window.shortcut = this.currentShortcut;
+                        this.renderWindows();
+                    }
+                    console.log('Config.js: Shortcut saved successfully');
+                } else {
+                    console.error('Config.js: Failed to save shortcut - may be invalid or conflicting');
+                    alert('Failed to save shortcut. It may be invalid or already in use.');
                 }
             } catch (error) {
                 console.error('Config.js: Error saving shortcut:', error);
+                alert('Error saving shortcut: ' + error.message);
             }
+        } else {
+            console.warn('Config.js: No shortcut to save');
+            alert('Please press a key or key combination first.');
         }
         
         this.closeShortcutModal();
@@ -591,7 +680,7 @@ class ConfigRenderer {
         }
         
         if (display) {
-            display.classList.remove('recording');
+            display.classList.remove('recording', 'captured');
         }
         
         // Clean up event listener

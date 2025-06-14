@@ -76,20 +76,21 @@
     </div>
 
     <!-- Shortcut capture modal -->
-    <div id="shortcut-modal" class="modal" style="display: none;">
+    <div id="shortcut-modal" class="modal" style="display: none;" tabindex="-1">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="shortcut-title">Set Keyboard Shortcut</h3>
                 <button class="modal-close" onclick="configRenderer.closeShortcutModal()">×</button>
             </div>
             <div class="modal-body">
-                <p id="shortcut-instruction">Press the key combination you want to use for this window:</p>
-                <div id="shortcut-display" class="shortcut-display-modal">No shortcut</div>
+                <p id="shortcut-instruction">Press any key or key combination:</p>
+                <div id="shortcut-display" class="shortcut-display-modal">Press any key or combination...</div>
                 <div class="shortcut-examples">
                     <p><strong>Examples:</strong></p>
                     <p>
                         <code>A</code> <code>F1</code> <code>Space</code> <code>Ctrl+1</code> 
                         <code>Alt+F1</code> <code>Shift+Q</code> <code>Ctrl+Alt+S</code>
+                        <code>;</code> <code>=</code> <code>,</code> <code>.</code> <code>/</code>
                     </p>
                 </div>
             </div>

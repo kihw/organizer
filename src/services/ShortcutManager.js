@@ -42,6 +42,7 @@ class ShortcutManager {
         // Store in persistent storage
         this.saveShortcutToStore(windowId, shortcut);
         
+        console.log(`ShortcutManager: Successfully registered shortcut ${accelerator} for window ${windowId}`);
         return true;
       } else {
         console.warn(`Failed to register shortcut: ${accelerator}`);
@@ -64,6 +65,7 @@ class ShortcutManager {
         // Remove from persistent storage
         this.removeShortcutFromStore(windowId);
         
+        console.log(`ShortcutManager: Removed shortcut ${shortcutInfo.accelerator} for window ${windowId}`);
         return true;
       } catch (error) {
         console.error('Error removing shortcut:', error);
@@ -74,6 +76,8 @@ class ShortcutManager {
 
   convertShortcutToAccelerator(shortcut) {
     if (!shortcut) return '';
+    
+    console.log(`ShortcutManager: Converting shortcut "${shortcut}" to accelerator`);
     
     // Clean up the shortcut string
     let accelerator = shortcut.trim();
@@ -138,25 +142,34 @@ class ShortcutManager {
           'nummult': 'nummult',
           'numdiv': 'numdiv',
           'numdec': 'numdec',
-          // Special characters
-          'semicolon': ';',
-          'equal': '=',
-          'comma': ',',
-          'period': '.',
-          'slash': '/',
-          'backslash': '\\',
-          'quote': "'",
-          'backquote': '`',
-          'bracketleft': '[',
-          'bracketright': ']'
+          // Special characters - keep as is for single character keys
+          ';': ';',
+          '=': '=',
+          ',': ',',
+          '.': '.',
+          '/': '/',
+          '\\': '\\',
+          "'": "'",
+          '`': '`',
+          '[': '[',
+          ']': ']',
+          '-': '-'
         };
         
-        const mappedKey = keyMappings[part] || part.toUpperCase();
-        processedParts.push(mappedKey);
+        // Check if it's a mapped key first
+        if (keyMappings[part]) {
+          processedParts.push(keyMappings[part]);
+        } else {
+          // For single character keys (letters, numbers, symbols), convert to uppercase
+          const mappedKey = part.toUpperCase();
+          processedParts.push(mappedKey);
+        }
       }
     });
     
-    return processedParts.join('+');
+    const result = processedParts.join('+');
+    console.log(`ShortcutManager: Converted "${shortcut}" to "${result}"`);
+    return result;
   }
 
   validateShortcut(shortcut) {
@@ -165,11 +178,17 @@ class ShortcutManager {
     try {
       const accelerator = this.convertShortcutToAccelerator(shortcut);
       
-      // Allow single keys and combinations
-      const validPattern = /^(CommandOrControl|Alt|Shift|Super)(\+(CommandOrControl|Alt|Shift|Super))*\+[A-Z0-9;=,.\/'`\[\]\\-]$|^[A-Z0-9;=,.\/'`\[\]\\-]$|^F[1-9]|F1[0-2]$|^num[0-9]$|^Space$|^Return$|^Backspace$|^Tab$|^Escape$/;
+      // Allow single keys and combinations - much more permissive pattern
+      const validPattern = /^(CommandOrControl|Alt|Shift|Super)(\+(CommandOrControl|Alt|Shift|Super))*\+.+$|^.+$/;
       
-      return accelerator.length > 0 && !this.registeredAccelerators.has(accelerator);
+      const isValidFormat = validPattern.test(accelerator);
+      const isNotConflicting = !this.registeredAccelerators.has(accelerator);
+      
+      console.log(`ShortcutManager: Validating "${shortcut}" -> "${accelerator}": format=${isValidFormat}, noConflict=${isNotConflicting}`);
+      
+      return accelerator.length > 0 && isValidFormat && isNotConflicting;
     } catch (error) {
+      console.error('ShortcutManager: Error validating shortcut:', error);
       return false;
     }
   }
@@ -184,6 +203,8 @@ class ShortcutManager {
     shortcuts.forEach(([windowId, info]) => {
       this.setWindowShortcut(windowId, info.original, info.callback);
     });
+    
+    console.log(`ShortcutManager: Activated ${shortcuts.length} shortcuts`);
   }
 
   deactivateAll() {
@@ -191,6 +212,7 @@ class ShortcutManager {
     try {
       globalShortcut.unregisterAll();
       this.registeredAccelerators.clear();
+      console.log('ShortcutManager: Deactivated all shortcuts');
     } catch (error) {
       console.error('Error deactivating shortcuts:', error);
     }
@@ -201,6 +223,7 @@ class ShortcutManager {
       globalShortcut.unregisterAll();
       this.shortcuts.clear();
       this.registeredAccelerators.clear();
+      console.log('ShortcutManager: Cleaned up all shortcuts');
     } catch (error) {
       console.error('Error cleaning up shortcuts:', error);
     }
