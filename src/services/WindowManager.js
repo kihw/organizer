@@ -7,7 +7,6 @@ class WindowManager {
     this.windows = new Map();
     this.lastWindowCheck = 0;
     this.isLinux = process.platform === 'linux';
-    this.gameType = 'dofus2'; // Default game type
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -31,15 +30,6 @@ class WindowManager {
       'ouginak': { name: 'Ouginak', avatar: '18' },
       'forgelance': { name: 'Forgelance', avatar: '20' }
     };
-  }
-
-  setGlobalGameType(gameType) {
-    this.gameType = gameType;
-    console.log(`WindowManager: Set game type to ${gameType}`);
-  }
-
-  getGlobalGameType() {
-    return this.gameType;
   }
 
   getDofusClasses() {
@@ -75,7 +65,7 @@ class WindowManager {
         dofusWindows = await this.getFallbackWindows();
       }
 
-      console.log(`WindowManager: Found ${dofusWindows.length} Dofus windows with game type: ${this.gameType}`);
+      console.log(`WindowManager: Found ${dofusWindows.length} Dofus windows`);
       console.log(`WindowManager: Windows details:`, dofusWindows.map(w => ({ id: w.id, title: w.title, className: w.className })));
 
       // Sort by initiative (descending), then by character name
@@ -96,7 +86,7 @@ class WindowManager {
 
   async getLinuxWindows() {
     try {
-      console.log(`WindowManager: Scanning for ${this.gameType} windows on Linux...`);
+      console.log('WindowManager: Scanning for Dofus windows on Linux...');
       
       // Try multiple methods to get window information
       const methods = [
@@ -323,29 +313,11 @@ class WindowManager {
   }
 
   getDofusClassPatterns() {
-    switch (this.gameType) {
-      case 'dofus2':
-        return ['Dofus', 'dofus', 'ankama', 'Ankama'];
-      case 'dofus3':
-        return ['Dofus', 'dofus', 'Dofus.x64', 'dofus3', 'DofusUnity', 'dofus-unity'];
-      case 'retro':
-        return ['DofusRetro', 'dofus-retro', 'retro'];
-      default:
-        return ['Dofus', 'dofus', 'ankama', 'Ankama', 'retro', 'DofusRetro'];
-    }
+    return ['Dofus', 'dofus', 'ankama', 'Ankama', 'retro', 'DofusRetro'];
   }
 
   getDofusTitlePatterns() {
-    switch (this.gameType) {
-      case 'dofus2':
-        return ['Dofus', 'Ankama'];
-      case 'dofus3':
-        return ['Dofus', 'Dofus 3', 'Dofus3', 'Unity'];
-      case 'retro':
-        return ['Dofus Retro', 'Retro'];
-      default:
-        return ['Dofus', 'Ankama', 'Retro'];
-    }
+    return ['Dofus', 'Ankama', 'Retro'];
   }
 
   async getFallbackWindows() {
@@ -387,32 +359,6 @@ class WindowManager {
             this.windows.set(windowId, { info: windowInfo });
           }
         }
-      }
-      
-      // If no processes found, create a test window for debugging
-      if (windows.length === 0) {
-        console.log('No Dofus processes found. Creating test window for debugging...');
-        const testWindowId = 'test_dofus_window';
-        const testClass = 'feca'; // Default class for test
-        const testWindow = {
-          id: testWindowId,
-          title: 'Dofus - Test Character',
-          processName: 'Dofus',
-          className: 'dofus',
-          pid: '12345',
-          character: 'Test Character',
-          dofusClass: testClass,
-          customName: this.getStoredCustomName(testWindowId),
-          initiative: this.getStoredInitiative(testWindowId),
-          isActive: true,
-          bounds: { x: 0, y: 0, width: 800, height: 600 },
-          avatar: this.getClassAvatar(testClass),
-          shortcut: this.getStoredShortcut(testWindowId),
-          enabled: this.getStoredEnabled(testWindowId)
-        };
-        
-        windows.push(testWindow);
-        this.windows.set(testWindowId, { info: testWindow });
       }
 
       return windows;
@@ -459,16 +405,7 @@ class WindowManager {
   }
 
   getDofusProcessNames() {
-    switch (this.gameType) {
-      case 'dofus2':
-        return ['dofus', 'Dofus', 'ankama', 'java.*dofus'];
-      case 'dofus3':
-        return ['dofus3', 'Dofus3', 'unity.*dofus', 'dofus.*unity'];
-      case 'retro':
-        return ['retro', 'dofus.*retro', 'dofus.*1.29'];
-      default:
-        return ['dofus', 'Dofus', 'ankama', 'retro', 'java.*dofus'];
-    }
+    return ['dofus', 'Dofus', 'ankama', 'java.*dofus', 'retro'];
   }
 
   isDofusProcess(command) {
@@ -483,7 +420,7 @@ class WindowManager {
     }
     
     // Check for Dofus-related terms
-    const dofusTerms = ['dofus', 'ankama', 'retro'];
+    const dofusTerms = ['dofus', 'ankama', 'retro', 'steamer', 'boulonix'];
     return dofusTerms.some(term => commandLower.includes(term));
   }
 
@@ -536,7 +473,7 @@ class WindowManager {
     if (!title || typeof title !== 'string') return false;
     
     const titleLower = title.toLowerCase();
-    console.log(`Checking if window is Dofus: "${title}" (game type: ${this.gameType})`);
+    console.log(`Checking if window is Dofus: "${title}"`);
     
     // First exclude system windows and browsers
     const excludePatterns = [
@@ -554,45 +491,14 @@ class WindowManager {
       return false;
     }
     
-    // Different patterns based on game type
-    let dofusPatterns = [];
-    
-    switch (this.gameType) {
-      case 'dofus2':
-        dofusPatterns = [
-          /\bdofus\b(?!\s*retro)/i,  // "dofus" word but not "dofus retro"
-          /\bankama\b(?!\s*retro)/i, // "ankama" word but not "ankama retro"
-          /dofus\s*2/i,              // "dofus 2"
-          /^.*\s-\sdofus$/i          // Anything ending with "- dofus"
-        ];
-        break;
-      case 'dofus3':
-        dofusPatterns = [
-          /\bdofus\s*3\b/i,          // "dofus 3"
-          /\bdofus.*unity\b/i,       // "dofus unity"
-          /\bdofus.*beta\b/i,        // "dofus beta"
-          /\bunity.*dofus\b/i,       // "unity dofus"
-          /^dofus$/i,                // Just "Dofus" (common for Dofus 3)
-          /\bdofus\.x64\b/i          // "Dofus.x64" class pattern
-        ];
-        break;
-      case 'retro':
-        dofusPatterns = [
-          /\bdofus\s*retro\b/i,      // "dofus retro"
-          /\bretro.*dofus\b/i,       // "retro dofus"
-          /\bdofus.*1\.29\b/i,       // "dofus 1.29"
-          /\bretro\b/i               // Just "retro" (be careful with this)
-        ];
-        break;
-      default:
-        // Detect all types if no specific type set
-        dofusPatterns = [
-          /\bdofus\b/i,
-          /\bankama\b/i,
-          /\bretro\b/i,
-          /\bwakfu\b/i
-        ];
-    }
+    // Check for Dofus patterns
+    const dofusPatterns = [
+      /\bdofus\b/i,
+      /\bankama\b/i,
+      /\bretro\b/i,
+      /\bsteamer\b/i,
+      /\bboulonix\b/i
+    ];
     
     const isDofus = dofusPatterns.some(pattern => {
       const matches = pattern.test(title);

@@ -6,7 +6,6 @@ class WindowManagerWindows {
   constructor() {
     this.windows = new Map();
     this.lastWindowCheck = 0;
-    this.gameType = 'dofus3'; // Default to Dofus 3
     this.psScriptPath = null;
     this.psScriptReady = false;
     
@@ -137,8 +136,6 @@ public class WindowsAPI {
 "@
 
 function Get-DofusWindows {
-    param([string]$GameType = "dofus3")
-    
     $windows = @()
     $callback = {
         param($hwnd, $lparam)
@@ -164,24 +161,21 @@ function Get-DofusWindows {
                     $foregroundWindow = [WindowsAPI]::GetForegroundWindow()
                     $isActive = $hwnd -eq $foregroundWindow
                     
-                    # Check if this is a Dofus window based on game type
+                    # Check if this is a Dofus window - simplified detection
                     $isDofus = $false
-                    switch ($GameType) {
-                        "dofus2" {
-                            $isDofus = ($title -match "Dofus(?!\s*3)" -or $title -match "Ankama") -and 
-                                      ($title -notmatch "Retro|retro") -and
-                                      ($className -match "Dofus|Ankama|SunAwtFrame|JavaFrame")
-                        }
-                        "dofus3" {
-                            $isDofus = ($title -match "Dofus" -or $className -match "UnityWndClass|Dofus\.exe") -and
-                                      ($title -notmatch "Retro|retro")
-                        }
-                        "retro" {
-                            $isDofus = ($title -match "Retro|retro" -or $title -match "Dofus.*1\.29")
-                        }
-                        default {
-                            $isDofus = $title -match "Dofus|Ankama|Retro"
-                        }
+                    
+                    # Look for Dofus-related keywords in title or class name
+                    $titleLower = $title.ToLower()
+                    $classLower = $className.ToLower()
+                    
+                    # Exclude our own organizer windows
+                    if ($title -match "Organizer|Configuration") {
+                        $isDofus = $false
+                    }
+                    # Check for Dofus patterns
+                    elseif ($titleLower -match "dofus|steamer|boulonix|ankama" -or 
+                           $classLower -match "dofus|unity|java") {
+                        $isDofus = $true
                     }
                     
                     if ($isDofus) {
@@ -266,8 +260,7 @@ function Move-Window {
 try {
     switch ($args[0]) {
         "get-windows" { 
-            $gameType = if ($args[1]) { $args[1] } else { "dofus3" }
-            $result = Get-DofusWindows -GameType $gameType
+            $result = Get-DofusWindows
             if ($result.Count -gt 0) {
                 $result | ConvertTo-Json -Depth 3
             } else {
@@ -313,7 +306,7 @@ try {
 
   async testPowerShellScript() {
     try {
-      const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows "dofus3"`;
+      const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows`;
       const { stdout, stderr } = await execAsync(command, { timeout: 5000 });
       
       if (stderr && stderr.trim()) {
@@ -327,15 +320,6 @@ try {
       console.error('WindowManagerWindows: PowerShell script test failed:', error);
       this.psScriptReady = false;
     }
-  }
-
-  setGlobalGameType(gameType) {
-    this.gameType = gameType;
-    console.log(`WindowManagerWindows: Set game type to ${gameType}`);
-  }
-
-  getGlobalGameType() {
-    return this.gameType;
   }
 
   getDofusClasses() {
@@ -362,7 +346,7 @@ try {
       }
       this.lastWindowCheck = now;
 
-      console.log(`WindowManagerWindows: Scanning for ${this.gameType} windows...`);
+      console.log('WindowManagerWindows: Scanning for Dofus windows...');
       
       let rawWindows = [];
       
@@ -382,12 +366,6 @@ try {
         console.log('WindowManagerWindows: Alternative method returned no windows, trying WMIC...');
         rawWindows = await this.getWindowsWithWmic();
       }
-      
-      // If still no windows, create test windows for development
-      if (rawWindows.length === 0) {
-        console.log('WindowManagerWindows: No windows found, creating test windows...');
-        rawWindows = this.createTestWindows();
-      }
 
       const dofusWindows = this.processRawWindows(rawWindows);
       
@@ -404,13 +382,13 @@ try {
       return dofusWindows;
     } catch (error) {
       console.error('WindowManagerWindows: Error getting Dofus windows:', error);
-      return this.createTestWindows().map(w => this.processRawWindows([w])[0]).filter(Boolean);
+      return [];
     }
   }
 
   async getWindowsWithPowerShell() {
     try {
-      const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows "${this.gameType}"`;
+      const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows`;
       const { stdout, stderr } = await execAsync(command, { timeout: 10000 });
       
       if (stderr && stderr.trim()) {
@@ -453,22 +431,19 @@ try {
           const result = JSON.parse(stdout.trim());
           const windows = Array.isArray(result) ? result : [result];
           
-          // Filter windows based on game type
+          // Filter out organizer windows
           return windows.filter(window => {
             if (!window.Title) return false;
             
             const title = window.Title.toLowerCase();
             
-            switch (this.gameType) {
-              case 'dofus2':
-                return title.includes('dofus') && !title.includes('retro') && !title.includes('3');
-              case 'dofus3':
-                return title.includes('dofus') && !title.includes('retro');
-              case 'retro':
-                return title.includes('retro') || title.includes('1.29');
-              default:
-                return title.includes('dofus') || title.includes('steamer') || title.includes('boulonix');
+            // Exclude organizer windows
+            if (title.includes('organizer') || title.includes('configuration')) {
+              return false;
             }
+            
+            // Include Dofus-related windows
+            return title.includes('dofus') || title.includes('steamer') || title.includes('boulonix') || title.includes('ankama');
           });
         } catch (parseError) {
           console.error('WindowManagerWindows: Failed to parse alternative PowerShell output:', parseError);
@@ -488,7 +463,7 @@ try {
       console.log('WindowManagerWindows: Using WMIC fallback method...');
       
       // Get processes that might be Dofus
-      const processPatterns = this.getDofusProcessPatterns();
+      const processPatterns = ['Dofus', 'dofus', 'ankama', 'java'];
       const windows = [];
       
       for (const pattern of processPatterns) {
@@ -537,19 +512,6 @@ try {
     }
   }
 
-  getDofusProcessPatterns() {
-    switch (this.gameType) {
-      case 'dofus2':
-        return ['Dofus.exe', 'dofus.exe', 'ankama.exe', 'java.exe'];
-      case 'dofus3':
-        return ['Dofus.exe', 'dofus.exe', 'DofusUnity.exe', 'Dofus3.exe'];
-      case 'retro':
-        return ['DofusRetro.exe', 'retro.exe', 'dofus-retro.exe'];
-      default:
-        return ['Dofus.exe', 'dofus.exe', 'ankama.exe'];
-    }
-  }
-
   isDofusProcess(commandLine) {
     if (!commandLine) return false;
     
@@ -562,7 +524,7 @@ try {
     }
     
     // Check for Dofus-related terms
-    const dofusTerms = ['dofus', 'ankama', 'retro'];
+    const dofusTerms = ['dofus', 'ankama', 'steamer', 'boulonix'];
     return dofusTerms.some(term => commandLower.includes(term));
   }
 
@@ -576,45 +538,6 @@ try {
       return 'TestChar - Cra - Dofus 2 - Release';
     }
     return 'TestChar - Feca - Dofus 3 - Beta';
-  }
-
-  createTestWindows() {
-    // Create test windows for development/debugging with proper title format
-    console.log('WindowManagerWindows: Creating test windows for debugging...');
-    return [
-      {
-        Handle: 'test_12345',
-        Title: 'Gandalf - Iop - Dofus 3 - Beta',
-        ClassName: 'TestClass',
-        ProcessId: 12345,
-        IsActive: true,
-        Bounds: { X: 100, Y: 100, Width: 800, Height: 600 }
-      },
-      {
-        Handle: 'test_12346',
-        Title: 'Legolas - Cra - Dofus 3 - Beta',
-        ClassName: 'TestClass',
-        ProcessId: 12346,
-        IsActive: false,
-        Bounds: { X: 200, Y: 200, Width: 800, Height: 600 }
-      },
-      {
-        Handle: 'test_12347',
-        Title: 'Gimli - Enutrof - Dofus 3 - Beta',
-        ClassName: 'TestClass',
-        ProcessId: 12347,
-        IsActive: false,
-        Bounds: { X: 300, Y: 300, Width: 800, Height: 600 }
-      },
-      {
-        Handle: 'test_12348',
-        Title: 'Aragorn - Sacrieur - Dofus 3 - Beta',
-        ClassName: 'TestClass',
-        ProcessId: 12348,
-        IsActive: false,
-        Bounds: { X: 400, Y: 400, Width: 800, Height: 600 }
-      }
-    ];
   }
 
   processRawWindows(rawWindows) {

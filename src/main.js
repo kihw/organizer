@@ -72,14 +72,8 @@ class DofusOrganizer {
 
   updateTrayMenu() {
     const lang = this.languageManager.getCurrentLanguage();
-    const gameType = this.store.get('globalGameType', 'dofus3');
-    const gameTypeLabels = {
-      'dofus2': 'Dofus 2',
-      'dofus3': 'Dofus 3',
-      'retro': 'Dofus Retro'
-    };
     
-    console.log(`DofusOrganizer: Updating tray menu with game type: ${gameType}`);
+    console.log('DofusOrganizer: Updating tray menu');
     
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -91,29 +85,6 @@ class DofusOrganizer {
         click: () => this.refreshAndSort()
       },
       { type: 'separator' },
-      {
-        label: `Game Type: ${gameTypeLabels[gameType]}`,
-        submenu: [
-          {
-            label: 'Dofus 2',
-            type: 'radio',
-            checked: gameType === 'dofus2',
-            click: () => this.changeGameType('dofus2')
-          },
-          {
-            label: 'Dofus 3',
-            type: 'radio',
-            checked: gameType === 'dofus3',
-            click: () => this.changeGameType('dofus3')
-          },
-          {
-            label: 'Dofus Retro',
-            type: 'radio',
-            checked: gameType === 'retro',
-            click: () => this.changeGameType('retro')
-          }
-        ]
-      },
       {
         label: lang.main_language,
         submenu: this.languageManager.getLanguageMenu((langCode) => {
@@ -135,19 +106,6 @@ class DofusOrganizer {
     ]);
     
     this.tray.setContextMenu(contextMenu);
-  }
-
-  changeGameType(gameType) {
-    console.log(`DofusOrganizer: Changing game type to ${gameType}`);
-    this.store.set('globalGameType', gameType);
-    this.windowManager.setGlobalGameType(gameType);
-    this.updateTrayMenu();
-    
-    // Refresh windows to apply new detection
-    setTimeout(() => {
-      console.log('DofusOrganizer: Refreshing windows after game type change');
-      this.refreshAndSort();
-    }, 500);
   }
 
   showConfigWindow() {
@@ -404,11 +362,6 @@ class DofusOrganizer {
       this.shortcutManager.removeWindowShortcut(windowId);
     });
 
-    ipcMain.handle('set-game-type', (event, gameType) => {
-      console.log(`IPC: set-game-type called: ${gameType}`);
-      this.changeGameType(gameType);
-    });
-
     ipcMain.handle('organize-windows', (event, layout) => {
       console.log(`IPC: organize-windows called with layout: ${layout}`);
       return this.windowManager.organizeWindows(layout);
@@ -431,11 +384,6 @@ class DofusOrganizer {
     const language = this.store.get('language', 'FR');
     console.log(`DofusOrganizer: Setting language to ${language}`);
     this.languageManager.setLanguage(language);
-    
-    // Load and set global game type - default to dofus3
-    const gameType = this.store.get('globalGameType', 'dofus3');
-    console.log(`DofusOrganizer: Setting initial game type to ${gameType}`);
-    this.windowManager.setGlobalGameType(gameType);
     
     // Load and register shortcuts
     const shortcuts = this.store.get('shortcuts', {});
@@ -513,14 +461,8 @@ class DofusOrganizer {
     const lang = this.languageManager.getCurrentLanguage();
     const windowCount = this.dofusWindows.length;
     const enabledCount = this.dofusWindows.filter(w => w.enabled).length;
-    const gameType = this.store.get('globalGameType', 'dofus3');
-    const gameTypeLabels = {
-      'dofus2': 'Dofus 2',
-      'dofus3': 'Dofus 3',
-      'retro': 'Dofus Retro'
-    };
     
-    let tooltip = `Dofus Organizer (${gameTypeLabels[gameType]})\n`;
+    let tooltip = `Dofus Organizer\n`;
     if (windowCount === 0) {
       tooltip += lang.displayTray_element_0;
     } else if (windowCount === 1) {

@@ -15,10 +15,6 @@
                     <img src="../../assets/icons/refresh.png" alt="Refresh" onerror="this.style.display='none'">
                     <span>Refresh</span>
                 </button>
-                <button id="game-type-btn" class="btn btn-secondary" title="Change game type">
-                    <img src="../../assets/icons/game.png" alt="Game Type" onerror="this.style.display='none'">
-                    <span>Game Type</span>
-                </button>
                 <button id="language-btn" class="btn btn-secondary" title="Change language">
                     <img src="../../assets/icons/language.png" alt="Language" onerror="this.style.display='none'">
                     <span>Language</span>
@@ -98,57 +94,6 @@
                 <button id="shortcut-save" class="btn btn-primary">Save Shortcut</button>
                 <button id="shortcut-cancel" class="btn btn-secondary">Cancel</button>
                 <button id="shortcut-remove" class="btn btn-danger">Remove Shortcut</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Game type modal -->
-    <div id="game-type-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Select Game Type</h3>
-                <button class="modal-close" onclick="document.getElementById('game-type-modal').style.display='none'">×</button>
-            </div>
-            <div class="modal-body">
-                <p>Choose which type of Dofus windows to detect:</p>
-                <div class="game-type-options">
-                    <label class="game-type-option">
-                        <input type="radio" name="gameType" value="dofus2">
-                        <div class="option-content">
-                            <div class="option-icon">⚔️</div>
-                            <div class="option-text">
-                                <h4>Dofus 2</h4>
-                                <p>Modern Flash/AIR client</p>
-                            </div>
-                        </div>
-                    </label>
-                    
-                    <label class="game-type-option">
-                        <input type="radio" name="gameType" value="dofus3" checked>
-                        <div class="option-content">
-                            <div class="option-icon">🎮</div>
-                            <div class="option-text">
-                                <h4>Dofus 3</h4>
-                                <p>Unity/Beta client (recommended)</p>
-                            </div>
-                        </div>
-                    </label>
-                    
-                    <label class="game-type-option">
-                        <input type="radio" name="gameType" value="retro">
-                        <div class="option-content">
-                            <div class="option-icon">🏛️</div>
-                            <div class="option-text">
-                                <h4>Dofus Retro</h4>
-                                <p>Classic 1.29 version</p>
-                            </div>
-                        </div>
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="game-type-save" class="btn btn-primary">Apply Changes</button>
-                <button id="game-type-cancel" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
