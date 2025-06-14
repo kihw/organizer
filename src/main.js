@@ -23,7 +23,7 @@ class DofusOrganizer {
     this.languageManager = new LanguageManager();
     this.isConfiguring = false;
     this.dofusWindows = [];
-    this.windowMonitorInterval = null;
+    // REMOVED: this.windowMonitorInterval = null; - No more automatic monitoring
     this.shortcutsEnabled = true;
     this.globalShortcuts = {
       nextWindow: null,
@@ -41,7 +41,11 @@ class DofusOrganizer {
       this.createTray();
       this.setupEventHandlers();
       this.loadSettings();
-      this.startWindowMonitoring();
+      // REMOVED: this.startWindowMonitoring(); - No automatic monitoring
+      
+      // Only do initial scan on startup
+      console.log('DofusOrganizer: Performing initial window scan...');
+      this.refreshAndSort();
     });
 
     app.on('window-all-closed', (e) => {
@@ -639,22 +643,11 @@ class DofusOrganizer {
     });
   }
 
-  startWindowMonitoring() {
-    console.log('DofusOrganizer: Starting window monitoring...');
-    this.refreshAndSort();
-    
-    // Monitor windows every 3 seconds
-    this.windowMonitorInterval = setInterval(() => {
-      if (!this.isConfiguring) {
-        console.log('DofusOrganizer: Periodic window refresh...');
-        this.refreshAndSort();
-      }
-    }, 3000);
-  }
+  // REMOVED: startWindowMonitoring() - No more automatic monitoring
 
   async refreshAndSort() {
     try {
-      console.log('DofusOrganizer: refreshAndSort called');
+      console.log('DofusOrganizer: Manual refresh requested');
       const windows = await this.windowManager.getDofusWindows();
       console.log(`DofusOrganizer: WindowManager returned ${windows.length} windows`);
       
@@ -769,9 +762,7 @@ class DofusOrganizer {
 
   cleanup() {
     console.log('DofusOrganizer: Cleaning up...');
-    if (this.windowMonitorInterval) {
-      clearInterval(this.windowMonitorInterval);
-    }
+    // REMOVED: Window monitor interval cleanup - no longer needed
     this.shortcutManager.cleanup();
     
     // Unregister global shortcuts
