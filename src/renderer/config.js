@@ -191,7 +191,7 @@ class ConfigRenderer {
             this.shortcutsEnabled = await ipcRenderer.invoke('get-shortcuts-enabled');
             console.log('Config.js: Shortcuts enabled:', this.shortcutsEnabled);
 
-            // Get global shortcuts
+            // Get global shortcuts - now from config file
             this.globalShortcuts = await ipcRenderer.invoke('get-global-shortcuts');
             console.log('Config.js: Global shortcuts:', this.globalShortcuts);
             
@@ -697,7 +697,7 @@ class ConfigRenderer {
         if (this.currentShortcut) {
             try {
                 if (this.currentGlobalShortcutType) {
-                    // Save global shortcut
+                    // Save global shortcut - now using config file
                     console.log(`Config.js: Saving global shortcut ${this.currentShortcut} for ${this.currentGlobalShortcutType}`);
                     
                     const success = await ipcRenderer.invoke('set-global-shortcut', this.currentGlobalShortcutType, this.currentShortcut);
@@ -712,7 +712,7 @@ class ConfigRenderer {
                         alert('Failed to save shortcut. It may be invalid or already in use.');
                     }
                 } else if (this.currentShortcutWindowId) {
-                    // Save window shortcut
+                    // Save window shortcut - now using config file
                     console.log(`Config.js: Saving shortcut ${this.currentShortcut} for window ${this.currentShortcutWindowId}`);
                     
                     const success = await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindowId, this.currentShortcut);

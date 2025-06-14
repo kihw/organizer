@@ -40,9 +40,6 @@ class ShortcutManager {
         
         this.registeredAccelerators.add(accelerator);
         
-        // Store in persistent storage
-        this.saveShortcutToStore(windowId, shortcut);
-        
         console.log(`ShortcutManager: Successfully registered shortcut ${accelerator} for window ${windowId}`);
         return true;
       } else {
@@ -62,9 +59,6 @@ class ShortcutManager {
         globalShortcut.unregister(shortcutInfo.accelerator);
         this.registeredAccelerators.delete(shortcutInfo.accelerator);
         this.shortcuts.delete(windowId);
-        
-        // Remove from persistent storage
-        this.removeShortcutFromStore(windowId);
         
         console.log(`ShortcutManager: Removed shortcut ${shortcutInfo.accelerator} for window ${windowId}`);
         return true;
@@ -233,30 +227,6 @@ class ShortcutManager {
       shortcuts[windowId] = info.original;
     });
     return shortcuts;
-  }
-
-  saveShortcutToStore(windowId, shortcut) {
-    try {
-      const Store = require('electron-store');
-      const store = new Store();
-      const shortcuts = store.get('shortcuts', {});
-      shortcuts[windowId] = shortcut;
-      store.set('shortcuts', shortcuts);
-    } catch (error) {
-      console.error('Error saving shortcut to store:', error);
-    }
-  }
-
-  removeShortcutFromStore(windowId) {
-    try {
-      const Store = require('electron-store');
-      const store = new Store();
-      const shortcuts = store.get('shortcuts', {});
-      delete shortcuts[windowId];
-      store.set('shortcuts', shortcuts);
-    } catch (error) {
-      console.error('Error removing shortcut from store:', error);
-    }
   }
 }
 

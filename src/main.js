@@ -2,6 +2,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen } = requ
 const path = require('path');
 const Store = require('electron-store');
 const ShortcutManager = require('./services/ShortcutManager');
+const ShortcutConfigManager = require('./services/ShortcutConfigManager');
 const LanguageManager = require('./services/LanguageManager');
 
 // Import the appropriate WindowManager based on platform
@@ -15,6 +16,7 @@ if (process.platform === 'win32') {
 class DofusOrganizer {
   constructor() {
     this.store = new Store();
+    this.shortcutConfig = new ShortcutConfigManager();
     this.mainWindow = null;
     this.tray = null;
     this.dockWindow = null;
@@ -29,7 +31,7 @@ class DofusOrganizer {
       toggleShortcuts: null
     };
     this.isTogglingShortcuts = false;
-    this.shortcutsLoaded = false; // Track if shortcuts have been loaded
+    this.shortcutsLoaded = false;
     
     console.log('DofusOrganizer: Initializing application...');
     this.initializeApp();
@@ -41,6 +43,9 @@ class DofusOrganizer {
       this.createTray();
       this.setupEventHandlers();
       this.loadSettings();
+      
+      // Migrate from old electron-store if needed
+      this.migrateOldSettings();
       
       // Initial scan and shortcut setup
       console.log('DofusOrganizer: Performing initial window scan...');
@@ -65,6 +70,24 @@ class DofusOrganizer {
     });
   }
 
+  migrateOldSettings() {
+    try {
+      console.log('DofusOrganizer: Checking for old settings to migrate...');
+      const migratedCount = this.shortcutConfig.migrateFromElectronStore(this.store);
+      
+      if (migratedCount > 0) {
+        console.log(`DofusOrganizer: Migrated ${migratedCount} settings to new config system`);
+        
+        // Clear old settings from electron-store to avoid confusion
+        this.store.delete('shortcuts');
+        this.store.delete('globalShortcuts');
+        console.log('DofusOrganizer: Cleaned up old electron-store settings');
+      }
+    } catch (error) {
+      console.error('DofusOrganizer: Error during migration:', error);
+    }
+  }
+
   createTray() {
     const iconPath = path.join(__dirname, '../assets/icons/organizer.png');
     console.log('DofusOrganizer: Creating tray with icon:', iconPath);
@@ -87,8 +110,8 @@ class DofusOrganizer {
     
     console.log('DofusOrganizer: Updating tray menu');
     
-    const nextWindowShortcut = this.store.get('globalShortcuts.nextWindow', 'Ctrl+Tab');
-    const toggleShortcutsShortcut = this.store.get('globalShortcuts.toggleShortcuts', 'Ctrl+Shift+D');
+    const nextWindowShortcut = this.shortcutConfig.getGlobalShortcut('nextWindow') || 'Ctrl+Tab';
+    const toggleShortcutsShortcut = this.shortcutConfig.getGlobalShortcut('toggleShortcuts') || 'Ctrl+Shift+D';
     
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -124,12 +147,30 @@ class DofusOrganizer {
       },
       { type: 'separator' },
       {
+        label: 'Show Config File',
+        click: () => this.showConfigFile()
+      },
+      { type: 'separator' },
+      {
         label: lang.main_quit,
         click: () => this.quit()
       }
     ]);
     
     this.tray.setContextMenu(contextMenu);
+  }
+
+  showConfigFile() {
+    const { shell } = require('electron');
+    const configPath = this.shortcutConfig.getConfigFilePath();
+    
+    try {
+      // Show the config file in the file explorer
+      shell.showItemInFolder(configPath);
+      console.log('DofusOrganizer: Opened config file location:', configPath);
+    } catch (error) {
+      console.error('DofusOrganizer: Error opening config file location:', error);
+    }
   }
 
   showConfigWindow() {
@@ -357,8 +398,8 @@ class DofusOrganizer {
       // Unregister existing global shortcuts
       this.unregisterGlobalShortcuts();
       
-      const nextWindowShortcut = this.store.get('globalShortcuts.nextWindow');
-      const toggleShortcutsShortcut = this.store.get('globalShortcuts.toggleShortcuts');
+      const nextWindowShortcut = this.shortcutConfig.getGlobalShortcut('nextWindow');
+      const toggleShortcutsShortcut = this.shortcutConfig.getGlobalShortcut('toggleShortcuts');
       
       // Register next window shortcut (only when shortcuts are enabled)
       if (nextWindowShortcut && this.shortcutsEnabled) {
@@ -423,13 +464,6 @@ class DofusOrganizer {
     // IPC handlers for renderer processes
     ipcMain.handle('get-dofus-windows', () => {
       console.log(`IPC: get-dofus-windows called, returning ${this.dofusWindows.length} windows`);
-      console.log(`IPC: Windows data:`, this.dofusWindows.map(w => ({ 
-        id: w.id, 
-        title: w.title, 
-        character: w.character,
-        dofusClass: w.dofusClass,
-        enabled: w.enabled 
-      })));
       return this.dofusWindows;
     });
 
@@ -469,18 +503,28 @@ class DofusOrganizer {
         setTimeout(() => this.refreshAndSort(), 100);
       }
       
-      // Handle global shortcut changes
+      // Handle global shortcut changes - now using config file
       const globalShortcutChanges = Object.keys(settings).filter(key => key.startsWith('globalShortcuts.'));
       if (globalShortcutChanges.length > 0) {
-        console.log('DofusOrganizer: Global shortcuts changed, re-registering...');
+        console.log('DofusOrganizer: Global shortcuts changed, updating config file...');
+        globalShortcutChanges.forEach(key => {
+          const type = key.replace('globalShortcuts.', '');
+          const shortcut = settings[key];
+          this.shortcutConfig.setGlobalShortcut(type, shortcut);
+        });
         setTimeout(() => this.registerGlobalShortcuts(), 100);
         this.updateTrayMenu();
       }
       
-      // Handle window shortcut changes
+      // Handle window shortcut changes - now using config file
       const shortcutChanges = Object.keys(settings).filter(key => key.startsWith('shortcuts.'));
       if (shortcutChanges.length > 0) {
-        console.log('DofusOrganizer: Window shortcuts changed, re-registering...');
+        console.log('DofusOrganizer: Window shortcuts changed, updating config file...');
+        shortcutChanges.forEach(key => {
+          const windowId = key.replace('shortcuts.', '');
+          const shortcut = settings[key];
+          this.shortcutConfig.setWindowShortcut(windowId, shortcut);
+        });
         setTimeout(() => this.loadAndRegisterShortcuts(), 100);
       }
       
@@ -541,10 +585,12 @@ class DofusOrganizer {
         return false;
       }
       
-      // Save shortcut to store first
-      const shortcuts = this.store.get('shortcuts', {});
-      shortcuts[windowId] = shortcut;
-      this.store.set('shortcuts', shortcuts);
+      // Save shortcut to config file
+      const success = this.shortcutConfig.setWindowShortcut(windowId, shortcut);
+      if (!success) {
+        console.warn(`IPC: Failed to save shortcut to config: ${shortcut}`);
+        return false;
+      }
       
       // Register the shortcut
       return this.shortcutManager.setWindowShortcut(windowId, shortcut, async () => {
@@ -556,10 +602,8 @@ class DofusOrganizer {
     ipcMain.handle('remove-shortcut', (event, windowId) => {
       console.log(`IPC: remove-shortcut called for: ${windowId}`);
       
-      // Remove from store
-      const shortcuts = this.store.get('shortcuts', {});
-      delete shortcuts[windowId];
-      this.store.set('shortcuts', shortcuts);
+      // Remove from config file
+      this.shortcutConfig.removeWindowShortcut(windowId);
       
       // Remove from shortcut manager
       this.shortcutManager.removeWindowShortcut(windowId);
@@ -596,13 +640,10 @@ class DofusOrganizer {
       return this.shortcutsEnabled;
     });
 
-    // Global shortcuts management
+    // Global shortcuts management - now using config file
     ipcMain.handle('get-global-shortcuts', () => {
       console.log('IPC: get-global-shortcuts called');
-      return {
-        nextWindow: this.store.get('globalShortcuts.nextWindow', 'Ctrl+Tab'),
-        toggleShortcuts: this.store.get('globalShortcuts.toggleShortcuts', 'Ctrl+Shift+D')
-      };
+      return this.shortcutConfig.getAllGlobalShortcuts();
     });
 
     ipcMain.handle('set-global-shortcut', (event, type, shortcut) => {
@@ -614,8 +655,12 @@ class DofusOrganizer {
         return false;
       }
       
-      // Save the shortcut
-      this.store.set(`globalShortcuts.${type}`, shortcut);
+      // Save the shortcut to config file
+      const success = this.shortcutConfig.setGlobalShortcut(type, shortcut);
+      if (!success) {
+        console.warn(`IPC: Failed to save global shortcut to config: ${shortcut}`);
+        return false;
+      }
       
       // Re-register global shortcuts
       this.registerGlobalShortcuts();
@@ -626,9 +671,22 @@ class DofusOrganizer {
 
     ipcMain.handle('remove-global-shortcut', (event, type) => {
       console.log(`IPC: remove-global-shortcut called for: ${type}`);
-      this.store.delete(`globalShortcuts.${type}`);
+      this.shortcutConfig.removeGlobalShortcut(type);
       this.registerGlobalShortcuts();
       this.updateTrayMenu();
+    });
+
+    // Config file management
+    ipcMain.handle('get-shortcut-config-stats', () => {
+      return this.shortcutConfig.getStatistics();
+    });
+
+    ipcMain.handle('export-shortcut-config', () => {
+      return this.shortcutConfig.exportConfig();
+    });
+
+    ipcMain.handle('import-shortcut-config', (event, config) => {
+      return this.shortcutConfig.importConfig(config);
     });
   }
 
@@ -643,12 +701,12 @@ class DofusOrganizer {
     this.shortcutsEnabled = this.store.get('shortcutsEnabled', true);
     console.log(`DofusOrganizer: Shortcuts enabled: ${this.shortcutsEnabled}`);
     
-    // Set default global shortcuts if not set
-    if (!this.store.get('globalShortcuts.nextWindow')) {
-      this.store.set('globalShortcuts.nextWindow', 'Ctrl+Tab');
+    // Set default global shortcuts if not set in config file
+    if (!this.shortcutConfig.getGlobalShortcut('nextWindow')) {
+      this.shortcutConfig.setGlobalShortcut('nextWindow', 'Ctrl+Tab');
     }
-    if (!this.store.get('globalShortcuts.toggleShortcuts')) {
-      this.store.set('globalShortcuts.toggleShortcuts', 'Ctrl+Shift+D');
+    if (!this.shortcutConfig.getGlobalShortcut('toggleShortcuts')) {
+      this.shortcutConfig.setGlobalShortcut('toggleShortcuts', 'Ctrl+Shift+D');
     }
 
     // Register global shortcuts FIRST
@@ -662,25 +720,26 @@ class DofusOrganizer {
       return;
     }
     
-    console.log('DofusOrganizer: Loading and registering window shortcuts...');
+    console.log('DofusOrganizer: Loading and registering window shortcuts from config file...');
     
-    const shortcuts = this.store.get('shortcuts', {});
-    console.log(`DofusOrganizer: Found ${Object.keys(shortcuts).length} stored shortcuts`);
+    const shortcuts = this.shortcutConfig.getAllWindowShortcuts();
+    console.log(`DofusOrganizer: Found ${Object.keys(shortcuts).length} stored shortcuts in config`);
     
-    // Match shortcuts to current windows
+    // Match shortcuts to current windows and update character profiles
     let registeredCount = 0;
     
-    Object.keys(shortcuts).forEach(windowId => {
-      const shortcut = shortcuts[windowId];
+    this.dofusWindows.forEach(window => {
+      // Update character profile in config
+      this.shortcutConfig.setCharacterProfile(window.id, window.character, window.dofusClass);
       
-      // Check if this window ID exists in current windows
-      const window = this.dofusWindows.find(w => w.id === windowId);
-      if (window) {
-        console.log(`DofusOrganizer: Registering shortcut ${shortcut} for window ${windowId} (${window.character})`);
+      // Check if this window has a stored shortcut
+      const shortcut = shortcuts[window.id];
+      if (shortcut) {
+        console.log(`DofusOrganizer: Registering shortcut ${shortcut} for window ${window.id} (${window.character})`);
         
-        const success = this.shortcutManager.setWindowShortcut(windowId, shortcut, async () => {
-          console.log(`ShortcutManager: Executing shortcut for window ${windowId}`);
-          await this.windowManager.activateWindow(windowId);
+        const success = this.shortcutManager.setWindowShortcut(window.id, shortcut, async () => {
+          console.log(`ShortcutManager: Executing shortcut for window ${window.id}`);
+          await this.windowManager.activateWindow(window.id);
         });
         
         if (success) {
@@ -688,12 +747,14 @@ class DofusOrganizer {
           // Update window info with shortcut
           window.shortcut = shortcut;
         } else {
-          console.warn(`DofusOrganizer: Failed to register shortcut ${shortcut} for window ${windowId}`);
+          console.warn(`DofusOrganizer: Failed to register shortcut ${shortcut} for window ${window.id}`);
         }
-      } else {
-        console.log(`DofusOrganizer: Window ${windowId} not found in current windows, skipping shortcut ${shortcut}`);
       }
     });
+    
+    // Clean up old entries in config
+    const activeWindowIds = this.dofusWindows.map(w => w.id);
+    this.shortcutConfig.cleanupOldEntries(activeWindowIds);
     
     console.log(`DofusOrganizer: Successfully registered ${registeredCount} window shortcuts`);
     this.shortcutsLoaded = true;
@@ -722,6 +783,15 @@ class DofusOrganizer {
       
       if (hasChanged || this.dofusWindows.length !== windows.length || forceUpdate) {
         console.log(`DofusOrganizer: Window list updating... (hasChanged: ${hasChanged}, lengthDiff: ${this.dofusWindows.length !== windows.length}, forceUpdate: ${forceUpdate})`);
+        
+        // Load shortcuts from config for each window
+        windows.forEach(window => {
+          const storedShortcut = this.shortcutConfig.getWindowShortcut(window.id);
+          if (storedShortcut) {
+            window.shortcut = storedShortcut;
+          }
+        });
+        
         this.dofusWindows = windows;
         console.log(`DofusOrganizer: Updated dofusWindows array, now has ${this.dofusWindows.length} windows`);
         this.updateTrayTooltip();
@@ -816,7 +886,7 @@ class DofusOrganizer {
     this.shortcutManager.deactivateAll();
     
     // IMPORTANT: Keep the toggle shortcut active even when shortcuts are disabled
-    const toggleShortcutsShortcut = this.store.get('globalShortcuts.toggleShortcuts');
+    const toggleShortcutsShortcut = this.shortcutConfig.getGlobalShortcut('toggleShortcuts');
     if (toggleShortcutsShortcut) {
       const accelerator = this.shortcutManager.convertShortcutToAccelerator(toggleShortcutsShortcut);
       if (accelerator && !globalShortcut.isRegistered(accelerator)) {
