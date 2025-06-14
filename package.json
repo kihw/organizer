@@ -1,16 +1,17 @@
 {
-  "name": "dofus-organizer-linux",
+  "name": "dofus-organizer-windows",
   "version": "1.0.0",
-  "description": "Dofus Window Organizer for Linux - Converted from AutoIt",
+  "description": "Dofus Window Organizer for Windows - Converted from AutoIt",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
-    "build-linux": "electron-builder --linux",
+    "build-win": "electron-builder --win",
+    "build-portable": "electron-builder --win portable",
     "postinstall": "electron-builder install-app-deps"
   },
-  "keywords": ["dofus", "organizer", "window-manager", "gaming"],
+  "keywords": ["dofus", "organizer", "window-manager", "gaming", "windows"],
   "author": "Dofus Organizer Team",
   "license": "MIT",
   "devDependencies": {
@@ -19,7 +20,8 @@
   },
   "dependencies": {
     "electron-store": "^8.1.0",
-    "i18next": "^23.7.6"
+    "i18next": "^23.7.6",
+    "node-window-manager": "^2.2.4"
   },
   "build": {
     "appId": "com.dofus.organizer",
@@ -32,21 +34,34 @@
       "assets/**/*",
       "locales/**/*"
     ],
-    "linux": {
+    "win": {
       "target": [
         {
-          "target": "AppImage",
-          "arch": ["x64"]
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
         },
         {
-          "target": "deb",
+          "target": "portable",
           "arch": ["x64"]
         }
       ],
-      "category": "Game",
-      "desktop": {
-        "StartupWMClass": "dofus-organizer"
-      }
+      "icon": "assets/icons/organizer.ico",
+      "requestedExecutionLevel": "requireAdministrator",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false,
+      "installerIcon": "assets/icons/organizer.ico",
+      "uninstallerIcon": "assets/icons/organizer.ico",
+      "license": "LICENSE",
+      "warningsAsErrors": false
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
     }
   }
 }
