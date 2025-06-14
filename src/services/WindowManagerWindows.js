@@ -13,6 +13,7 @@ class WindowManagerWindows {
     this.windowIdMapping = new Map(); // ID stable -> handle string
     this.realWindowHandles = new Map(); // ID stable -> handle numérique RÉEL
     this.activationScriptPath = null;
+    this.fastActivationScript = null; // NOUVEAU: Script ultra-rapide
     
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -49,121 +50,94 @@ class WindowManagerWindows {
       'eliotrop': 'eliotrope', 'elio': 'eliotrope', 'hupper': 'huppermage', 'ougi': 'ouginak'
     };
     
-    // Créer le script d'activation
-    this.createActivationScript();
+    // Créer les scripts d'activation optimisés
+    this.createOptimizedActivationScripts();
     
-    console.log('WindowManagerWindows: Initialized with CORRECTED HANDLE CONVERSION');
+    console.log('WindowManagerWindows: Initialized with ULTRA-FAST activation system');
   }
 
   /**
-   * CORRECTION: Script PowerShell avec conversion de handle corrigée
+   * NOUVEAU: Scripts PowerShell ultra-optimisés pour activation rapide
    */
-  async createActivationScript() {
+  async createOptimizedActivationScripts() {
     try {
-      // Script PowerShell corrigé avec validation du handle
-      const scriptContent = `
-param([string]$HandleString)
+      // Script ultra-rapide (méthode principale)
+      const fastScriptContent = `
+param([string]$Handle)
 
+# Définition des APIs Windows en une seule fois
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
-
-public class Win32 {
-    [DllImport("user32.dll")]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
-    
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    
-    [DllImport("user32.dll")]
-    public static extern bool IsIconic(IntPtr hWnd);
-    
-    [DllImport("user32.dll")]
-    public static extern bool BringWindowToTop(IntPtr hWnd);
-    
-    [DllImport("user32.dll")]
-    public static extern bool IsWindow(IntPtr hWnd);
-    
-    [DllImport("user32.dll")]
-    public static extern bool IsWindowVisible(IntPtr hWnd);
-    
+public class FastWin32 {
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(uint dwProcessId);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
     public const int SW_RESTORE = 9;
-    public const int SW_SHOW = 5;
 }
 "@
 
 try {
-    # CORRECTION CRITIQUE: Validation et conversion sécurisée du handle
-    if ([string]::IsNullOrEmpty($HandleString)) {
-        Write-Host "Error: Handle string is null or empty"
-        return $false
+    # Conversion rapide du handle
+    $hwnd = [IntPtr]::new([long]$Handle)
+    
+    # Vérification rapide
+    if (-not [FastWin32]::IsWindow($hwnd)) { return $false }
+    
+    # Obtenir le PID pour AllowSetForegroundWindow
+    $processId = 0
+    [FastWin32]::GetWindowThreadProcessId($hwnd, [ref]$processId)
+    
+    # Permettre l'activation
+    if ($processId -gt 0) {
+        [FastWin32]::AllowSetForegroundWindow($processId)
     }
     
-    # Convertir le string en nombre puis en IntPtr
-    $handleNumber = 0
-    if (-not [long]::TryParse($HandleString, [ref]$handleNumber)) {
-        Write-Host "Error: Cannot parse handle string '$HandleString' to number"
-        return $false
+    # Restaurer si minimisée (rapide)
+    if ([FastWin32]::IsIconic($hwnd)) {
+        [FastWin32]::ShowWindow($hwnd, 9)
     }
     
-    if ($handleNumber -eq 0) {
-        Write-Host "Error: Handle number is zero"
-        return $false
-    }
+    # Activation ultra-rapide
+    [FastWin32]::BringWindowToTop($hwnd)
+    $result = [FastWin32]::SetForegroundWindow($hwnd)
     
-    # Créer l'IntPtr à partir du nombre
-    $hwnd = [IntPtr]::new($handleNumber)
-    
-    Write-Host "Processing handle: $HandleString -> $handleNumber -> $hwnd"
-    
-    # Vérifier que la fenêtre existe
-    if (-not [Win32]::IsWindow($hwnd)) {
-        Write-Host "Error: Handle does not point to a valid window"
-        return $false
-    }
-    
-    # Vérifier que la fenêtre est visible
-    if (-not [Win32]::IsWindowVisible($hwnd)) {
-        Write-Host "Warning: Window is not visible, showing it"
-        [Win32]::ShowWindow($hwnd, [Win32]::SW_SHOW)
-        Start-Sleep -Milliseconds 100
-    }
-    
-    # Si la fenêtre est minimisée, la restaurer
-    if ([Win32]::IsIconic($hwnd)) {
-        Write-Host "Window is minimized, restoring"
-        [Win32]::ShowWindow($hwnd, [Win32]::SW_RESTORE)
-        Start-Sleep -Milliseconds 100
-    }
-    
-    # Amener au premier plan
-    Write-Host "Bringing window to top"
-    $bringResult = [Win32]::BringWindowToTop($hwnd)
-    
-    # Activer la fenêtre
-    Write-Host "Setting foreground window"
-    $result = [Win32]::SetForegroundWindow($hwnd)
-    
-    Write-Host "BringWindowToTop result: $bringResult"
-    Write-Host "SetForegroundWindow result: $result"
-    
-    # Retourner le résultat
     return $result
     
 } catch {
-    Write-Host "Exception during activation: $_"
     return $false
 }
 `;
 
-      // Écrire le script dans un fichier temporaire
-      this.activationScriptPath = path.join(os.tmpdir(), 'dofus-activate-fixed.ps1');
-      fs.writeFileSync(this.activationScriptPath, scriptContent, 'utf8');
+      // Script de secours (encore plus simple)
+      const backupScriptContent = `
+param([string]$Handle)
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class SimpleWin32 { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'
+try {
+    $result = [SimpleWin32]::SetForegroundWindow([IntPtr]::new([long]$Handle))
+    return $result
+} catch {
+    return $false
+}
+`;
+
+      // Créer les fichiers de script
+      this.fastActivationScript = path.join(os.tmpdir(), 'dofus-fast-activate.ps1');
+      this.activationScriptPath = path.join(os.tmpdir(), 'dofus-backup-activate.ps1');
       
-      console.log(`WindowManagerWindows: Created CORRECTED activation script at ${this.activationScriptPath}`);
+      fs.writeFileSync(this.fastActivationScript, fastScriptContent, 'utf8');
+      fs.writeFileSync(this.activationScriptPath, backupScriptContent, 'utf8');
+      
+      console.log('WindowManagerWindows: Created ULTRA-FAST activation scripts');
       return true;
     } catch (error) {
-      console.error('WindowManagerWindows: Failed to create corrected activation script:', error);
+      console.error('WindowManagerWindows: Failed to create fast activation scripts:', error);
       return false;
     }
   }
@@ -544,11 +518,11 @@ try {
   }
 
   /**
-   * CORRECTION MAJEURE: Activation avec validation et conversion sécurisée du handle
+   * NOUVEAU: Activation ultra-rapide avec méthodes optimisées
    */
   async activateWindow(windowId) {
     try {
-      console.log(`WindowManagerWindows: CORRECTED activation for ${windowId}`);
+      console.log(`WindowManagerWindows: ULTRA-FAST activation for ${windowId}`);
       
       // CORRECTION CRITIQUE: Chercher le handle dans tous les mappings possibles
       let realHandle = this.realWindowHandles.get(windowId);
@@ -578,104 +552,118 @@ try {
         return false;
       }
       
-      console.log(`WindowManagerWindows: Using REAL handle ${realHandle} for activation`);
+      console.log(`WindowManagerWindows: Using REAL handle ${realHandle} for ULTRA-FAST activation`);
       
-      // Cache d'activation pour éviter les activations répétées
+      // Cache d'activation ultra-court pour éviter les activations répétées
       const cacheKey = realHandle.toString();
       const now = Date.now();
       
       if (this.activationCache.has(cacheKey)) {
         const lastActivation = this.activationCache.get(cacheKey);
-        if (now - lastActivation < 200) { // 200ms cooldown
+        if (now - lastActivation < 100) { // 100ms cooldown ultra-court
           console.log(`WindowManagerWindows: Recent activation cached for ${windowId}`);
           return true;
         }
       }
       
-      // MÉTHODE CORRIGÉE: Utiliser le script externe avec validation
-      if (this.activationScriptPath && fs.existsSync(this.activationScriptPath)) {
+      // MÉTHODE 1: Script ultra-rapide (priorité absolue)
+      if (this.fastActivationScript && fs.existsSync(this.fastActivationScript)) {
         try {
-          console.log(`WindowManagerWindows: Using CORRECTED external script for activation`);
+          console.log(`WindowManagerWindows: Using ULTRA-FAST script for ${windowId}`);
           
-          // CORRECTION: Passer le handle comme string au script
-          const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.activationScriptPath}" -HandleString "${realHandle}"`;
+          const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.fastActivationScript}" -Handle "${realHandle}"`;
           
-          const { stdout, stderr } = await execAsync(command, { timeout: 3000 });
+          const { stdout, stderr } = await execAsync(command, { timeout: 800 }); // Timeout réduit à 800ms
           
           if (stderr && stderr.trim()) {
-            console.warn(`WindowManagerWindows: Script stderr: ${stderr}`);
+            console.warn(`WindowManagerWindows: Fast script stderr: ${stderr}`);
           }
           
-          console.log(`WindowManagerWindows: Script stdout: ${stdout}`);
-          
-          // Le script retourne True/False
           const success = stdout.includes('True') || stdout.includes('$true');
           
           if (success) {
             this.activationCache.set(cacheKey, now);
             this.updateActiveState(windowId);
-            console.log(`WindowManagerWindows: CORRECTED script activation SUCCESS for ${windowId}`);
+            console.log(`WindowManagerWindows: ULTRA-FAST script SUCCESS for ${windowId}`);
             return true;
           } else {
-            console.warn(`WindowManagerWindows: Script activation FAILED for ${windowId}`);
+            console.warn(`WindowManagerWindows: Fast script failed for ${windowId}, trying backup...`);
           }
-        } catch (scriptError) {
-          console.warn(`WindowManagerWindows: Script execution failed: ${scriptError.message}`);
+        } catch (fastError) {
+          console.warn(`WindowManagerWindows: Fast script error: ${fastError.message}, trying backup...`);
         }
       }
       
-      // MÉTHODE ALTERNATIVE: Commande PowerShell inline simplifiée
+      // MÉTHODE 2: Script de secours (simple et rapide)
+      if (this.activationScriptPath && fs.existsSync(this.activationScriptPath)) {
+        try {
+          console.log(`WindowManagerWindows: Using backup script for ${windowId}`);
+          
+          const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.activationScriptPath}" -Handle "${realHandle}"`;
+          
+          const { stdout } = await execAsync(command, { timeout: 500 }); // Timeout très court
+          
+          const success = stdout.includes('True') || stdout.includes('$true');
+          
+          if (success) {
+            this.activationCache.set(cacheKey, now);
+            this.updateActiveState(windowId);
+            console.log(`WindowManagerWindows: Backup script SUCCESS for ${windowId}`);
+            return true;
+          }
+        } catch (backupError) {
+          console.warn(`WindowManagerWindows: Backup script error: ${backupError.message}`);
+        }
+      }
+      
+      // MÉTHODE 3: Commande PowerShell inline ultra-simple
       try {
-        console.log(`WindowManagerWindows: Using SIMPLIFIED PowerShell command for activation`);
+        console.log(`WindowManagerWindows: Using inline PowerShell for ${windowId}`);
         
-        // Commande PowerShell ultra-simplifiée
+        // Commande ultra-simplifiée
         const command = `powershell.exe -Command "[System.Runtime.InteropServices.DllImport('user32.dll')] param(); Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace User32; [User32.Win32]::SetForegroundWindow([IntPtr]${realHandle})"`;
         
-        const { stdout } = await execAsync(command, { timeout: 2000 });
+        const { stdout } = await execAsync(command, { timeout: 300 }); // Timeout ultra-court
         
         const success = stdout.includes('True') || stdout.trim() === 'True';
         
         if (success) {
           this.activationCache.set(cacheKey, now);
           this.updateActiveState(windowId);
-          console.log(`WindowManagerWindows: SIMPLIFIED activation SUCCESS for ${windowId}`);
+          console.log(`WindowManagerWindows: Inline PowerShell SUCCESS for ${windowId}`);
           return true;
-        } else {
-          console.warn(`WindowManagerWindows: Simplified activation FAILED for ${windowId}`);
         }
-      } catch (directError) {
-        console.warn(`WindowManagerWindows: Simplified activation failed: ${directError.message}`);
+      } catch (inlineError) {
+        console.warn(`WindowManagerWindows: Inline PowerShell error: ${inlineError.message}`);
       }
       
-      // MÉTHODE DE DERNIER RECOURS: Utiliser AppActivate
+      // MÉTHODE 4: AppActivate de dernier recours (très rapide)
       try {
-        console.log(`WindowManagerWindows: Using AppActivate as last resort for activation`);
+        console.log(`WindowManagerWindows: Using AppActivate for ${windowId}`);
         
-        // Utiliser AppActivate avec le PID au lieu du handle
         const window = this.windows.get(windowId);
         const pid = window?.info?.pid;
         
         if (pid && pid !== '0') {
           const command = `powershell.exe -Command "$shell = New-Object -ComObject WScript.Shell; $shell.AppActivate(${pid})"`;
           
-          await execAsync(command, { timeout: 1000 });
+          await execAsync(command, { timeout: 200 }); // Timeout ultra-court
           
-          // Supposer que ça a fonctionné
           this.activationCache.set(cacheKey, now);
           this.updateActiveState(windowId);
-          console.log(`WindowManagerWindows: AppActivate attempted for ${windowId} (PID: ${pid})`);
+          console.log(`WindowManagerWindows: AppActivate SUCCESS for ${windowId}`);
           return true;
         }
-      } catch (appActivateError) {
-        console.warn(`WindowManagerWindows: AppActivate failed: ${appActivateError.message}`);
+      } catch (appError) {
+        console.warn(`WindowManagerWindows: AppActivate error: ${appError.message}`);
       }
       
       // Si toutes les méthodes ont échoué
-      console.error(`WindowManagerWindows: ALL CORRECTED activation methods failed for ${windowId}`);
+      console.error(`WindowManagerWindows: ALL ULTRA-FAST methods failed for ${windowId}`);
       return false;
       
     } catch (error) {
-      console.error('WindowManagerWindows: Critical activation error:', error.message);
+      console.error('WindowManagerWindows: Critical ultra-fast activation error:', error.message);
       return false;
     }
   }
@@ -866,17 +854,21 @@ try {
     this.windowIdMapping.clear();
     this.realWindowHandles.clear();
     
-    // Supprimer le script d'activation
-    if (this.activationScriptPath && fs.existsSync(this.activationScriptPath)) {
-      try {
-        fs.unlinkSync(this.activationScriptPath);
-        console.log(`WindowManagerWindows: Removed activation script: ${this.activationScriptPath}`);
-      } catch (error) {
-        console.warn(`WindowManagerWindows: Failed to remove activation script: ${error.message}`);
-      }
-    }
+    // Supprimer les scripts d'activation
+    const scriptsToRemove = [this.activationScriptPath, this.fastActivationScript];
     
-    console.log('WindowManagerWindows: CORRECTED activation system cleaned up');
+    scriptsToRemove.forEach(scriptPath => {
+      if (scriptPath && fs.existsSync(scriptPath)) {
+        try {
+          fs.unlinkSync(scriptPath);
+          console.log(`WindowManagerWindows: Removed script: ${scriptPath}`);
+        } catch (error) {
+          console.warn(`WindowManagerWindows: Failed to remove script: ${error.message}`);
+        }
+      }
+    });
+    
+    console.log('WindowManagerWindows: ULTRA-FAST activation system cleaned up');
   }
 }
 
