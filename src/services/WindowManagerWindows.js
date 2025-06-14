@@ -1,9 +1,10 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const NativeWindowActivator = require('./NativeWindowActivator');
 
 /**
- * WindowManagerWindows v3.2 - Optimisé pour performance maximale
+ * WindowManagerWindows v4.0 - Sans PowerShell, activation native uniquement
  */
 class WindowManagerWindows {
   constructor() {
@@ -11,6 +12,10 @@ class WindowManagerWindows {
     this.lastWindowCheck = 0;
     this.activationCache = new Map();
     this.handleMapping = new Map();
+    
+    // NOUVEAU: Activateur natif sans PowerShell
+    this.nativeActivator = new NativeWindowActivator();
+    
     this.performanceStats = {
       detectionCount: 0,
       activationCount: 0,
@@ -64,7 +69,7 @@ class WindowManagerWindows {
       'launcher'
     ];
     
-    console.log('WindowManagerWindows: Initialized with optimized performance');
+    console.log('WindowManagerWindows: Initialized v4.0 - NO POWERSHELL, Native activation only');
   }
 
   getDofusClasses() {
@@ -81,7 +86,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * Détection rapide des fenêtres Dofus
+   * Détection rapide des fenêtres Dofus (inchangée)
    */
   async getDofusWindows() {
     const startTime = Date.now();
@@ -131,7 +136,59 @@ class WindowManagerWindows {
   }
 
   /**
-   * Détection simplifiée
+   * NOUVELLE MÉTHODE - Activation native sans PowerShell
+   */
+  async activateWindow(windowId) {
+    const startTime = Date.now();
+    
+    try {
+      console.log(`WindowManagerWindows: NATIVE activation for ${windowId} (NO POWERSHELL)`);
+      
+      // Obtenir le handle de fenêtre
+      const handle = this.handleMapping.get(windowId);
+      if (!handle || handle === 0) {
+        console.error(`WindowManagerWindows: No valid handle for ${windowId}`);
+        return false;
+      }
+      
+      // Vérifier le cache d'activation pour la performance
+      const cacheKey = handle.toString();
+      const now = Date.now();
+      
+      if (this.activationCache.has(cacheKey)) {
+        const lastActivation = this.activationCache.get(cacheKey);
+        if (now - lastActivation < 500) { // 500ms cooldown
+          console.log(`WindowManagerWindows: Recent activation cached for ${windowId}`);
+          return true;
+        }
+      }
+      
+      // ACTIVATION NATIVE - Plus de PowerShell !
+      const success = await this.nativeActivator.activateWindow(handle);
+      
+      const duration = Date.now() - startTime;
+      this.updateActivationStats(duration);
+      
+      if (success) {
+        this.activationCache.set(cacheKey, now);
+        this.updateActiveState(windowId);
+        console.log(`WindowManagerWindows: NATIVE activation SUCCESS for ${windowId} in ${duration}ms ✅`);
+        return true;
+      } else {
+        console.warn(`WindowManagerWindows: NATIVE activation FAILED for ${windowId} in ${duration}ms`);
+        return false;
+      }
+      
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`WindowManagerWindows: NATIVE activation error for ${windowId}:`, error.message);
+      this.updateActivationStats(duration);
+      return false;
+    }
+  }
+
+  /**
+   * Détection simplifiée (inchangée)
    */
   async detectDofusSimplified() {
     try {
@@ -171,7 +228,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * Détection par nom de processus
+   * Détection par nom de processus (inchangée)
    */
   async detectByProcessNameSimple() {
     try {
@@ -201,7 +258,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * Détection par titre de fenêtre
+   * Détection par titre de fenêtre (inchangée)
    */
   async detectByWindowTitleSimple() {
     try {
@@ -230,9 +287,7 @@ class WindowManagerWindows {
     }
   }
 
-  /**
-   * Filtrage des fenêtres de jeu uniquement
-   */
+  // Toutes les autres méthodes restent identiques...
   filterGameWindowsOnly(windows) {
     const gameWindows = [];
     
@@ -248,9 +303,6 @@ class WindowManagerWindows {
     return gameWindows;
   }
 
-  /**
-   * Vérification de fenêtre de jeu Dofus valide
-   */
   isValidDofusGameWindow(title) {
     if (!title || title.trim().length === 0) {
       return false;
@@ -283,9 +335,6 @@ class WindowManagerWindows {
     return true;
   }
 
-  /**
-   * Vérification du pattern personnage-classe valide
-   */
   hasValidCharacterPattern(title) {
     const patterns = [
       /^[^-]+ - [^-]+ - .+$/,  // "Character - Class - Version - Release"
@@ -296,9 +345,6 @@ class WindowManagerWindows {
     return patterns.some(pattern => pattern.test(title));
   }
 
-  /**
-   * Suppression des fenêtres dupliquées
-   */
   removeDuplicateWindows(windows) {
     const seen = new Set();
     const unique = [];
@@ -313,9 +359,6 @@ class WindowManagerWindows {
     return unique;
   }
 
-  /**
-   * Vérification de nom de classe Dofus valide
-   */
   containsValidDofusClass(title) {
     if (!title) return false;
     
@@ -340,9 +383,6 @@ class WindowManagerWindows {
     return false;
   }
 
-  /**
-   * Validation des données de processus
-   */
   validateProcessData(proc) {
     return proc && 
            proc.Title && 
@@ -352,9 +392,6 @@ class WindowManagerWindows {
            proc.ProcessName;
   }
 
-  /**
-   * Normalisation des données de processus
-   */
   normalizeProcessData(proc) {
     return {
       Handle: parseInt(proc.Handle) || 0,
@@ -366,9 +403,6 @@ class WindowManagerWindows {
     };
   }
 
-  /**
-   * Traitement des fenêtres brutes
-   */
   processRawWindows(rawWindows) {
     const processedWindows = [];
     const currentWindowIds = new Set();
@@ -418,9 +452,6 @@ class WindowManagerWindows {
     return processedWindows;
   }
 
-  /**
-   * Validation des données de fenêtre brute
-   */
   validateRawWindow(rawWindow) {
     if (!rawWindow.Handle || rawWindow.Handle === 0) {
       console.warn('WindowManagerWindows: Skipping window with invalid handle');
@@ -435,9 +466,6 @@ class WindowManagerWindows {
     return true;
   }
 
-  /**
-   * Nettoyage efficace des anciennes fenêtres
-   */
   cleanupOldWindows(currentWindowIds) {
     const keysToDelete = [];
     
@@ -457,9 +485,6 @@ class WindowManagerWindows {
     }
   }
 
-  /**
-   * Parsing du titre de fenêtre
-   */
   parseWindowTitle(title) {
     if (!title) {
       return { character: 'Dofus Player', dofusClass: 'feca' };
@@ -487,9 +512,6 @@ class WindowManagerWindows {
     return { character, dofusClass: 'feca' };
   }
 
-  /**
-   * Normalisation du nom de classe
-   */
   normalizeClassName(className) {
     if (!className) return 'feca';
     
@@ -506,9 +528,6 @@ class WindowManagerWindows {
     return this.classNameMappings[normalized] || 'feca';
   }
 
-  /**
-   * Génération d'ID de fenêtre stable
-   */
   generateStableWindowId(character, dofusClass, processId) {
     const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
     const normalizedClass = dofusClass.toLowerCase();
@@ -524,108 +543,6 @@ class WindowManagerWindows {
     return processName;
   }
 
-  /**
-   * Activation de fenêtre optimisée
-   */
-  async activateWindow(windowId) {
-    const startTime = Date.now();
-    
-    try {
-      console.log(`WindowManagerWindows: Activating ${windowId}`);
-      
-      // Obtenir le handle de fenêtre
-      const handle = this.handleMapping.get(windowId);
-      if (!handle || handle === 0) {
-        console.error(`WindowManagerWindows: No valid handle for ${windowId}`);
-        return false;
-      }
-      
-      // Vérifier le cache d'activation pour la performance
-      const cacheKey = handle.toString();
-      const now = Date.now();
-      
-      if (this.activationCache.has(cacheKey)) {
-        const lastActivation = this.activationCache.get(cacheKey);
-        if (now - lastActivation < 500) { // 500ms cooldown
-          console.log(`WindowManagerWindows: Recent activation cached for ${windowId}`);
-          return true;
-        }
-      }
-      
-      // Activation optimisée: seulement mettre au premier plan
-      const success = await this.executeOptimizedWindowActivation(handle);
-      
-      const duration = Date.now() - startTime;
-      this.updateActivationStats(duration);
-      
-      if (success) {
-        this.activationCache.set(cacheKey, now);
-        this.updateActiveState(windowId);
-        console.log(`WindowManagerWindows: Activation SUCCESS for ${windowId} in ${duration}ms`);
-        return true;
-      } else {
-        return false;
-      }
-      
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Exécution d'activation optimisée
-   */
-  async executeOptimizedWindowActivation(handle) {
-    try {
-      console.log(`WindowManagerWindows: Executing optimized activation for handle ${handle}`);
-
-      const success = await this.bringWindowToFront(handle);
-      if (success) {
-        console.log('WindowManagerWindows: Window brought to front ✅');
-        return true;
-      }
-
-      return false;
-
-    } catch (error) {
-      console.error('WindowManagerWindows: Optimized activation error:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Mise au premier plan avec plusieurs appels WinAPI
-   */
-  async bringWindowToFront(handle) {
-    try {
-      console.log(`WindowManagerWindows: Bringing window ${handle} to front`);
-
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow); [DllImport(\\"user32.dll\\")] public static extern bool BringWindowToTop(IntPtr hWnd); }'; $h=[IntPtr]${handle}; [Win32]::ShowWindow($h,9) | Out-Null; [Win32]::BringWindowToTop($h) | Out-Null; $result=[Win32]::SetForegroundWindow($h); Write-Output $result"`;
-
-      const { stdout } = await execAsync(command, {
-        timeout: 1000,
-        encoding: 'utf8',
-        windowsHide: true
-      });
-
-      const result = stdout && stdout.trim();
-      const success = result && /^(true|1)$/i.test(result);
-
-      if (success) {
-        console.log('WindowManagerWindows: bringWindowToFront SUCCESS ✅');
-      }
-
-      return !!success;
-
-    } catch (error) {
-      console.error('WindowManagerWindows: bringWindowToFront failed:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Mise à jour de l'état actif des fenêtres
-   */
   updateActiveState(activeWindowId) {
     for (const [windowId, windowData] of this.windows) {
       if (windowData && windowData.info) {
@@ -634,17 +551,11 @@ class WindowManagerWindows {
     }
   }
 
-  /**
-   * Organisation des fenêtres désactivée
-   */
   async organizeWindows(layout = 'grid') {
     console.log(`WindowManagerWindows: Window organization DISABLED - not working properly`);
     return false;
   }
 
-  /**
-   * Mise à jour des statistiques de détection
-   */
   updateDetectionStats(duration) {
     this.performanceStats.detectionCount++;
     const count = this.performanceStats.detectionCount;
@@ -652,9 +563,6 @@ class WindowManagerWindows {
     this.performanceStats.avgDetectionTime = ((current * (count - 1)) + duration) / count;
   }
 
-  /**
-   * Mise à jour des statistiques d'activation
-   */
   updateActivationStats(duration) {
     this.performanceStats.activationCount++;
     const count = this.performanceStats.activationCount;
@@ -663,10 +571,13 @@ class WindowManagerWindows {
   }
 
   getPerformanceStats() {
+    const nativeStats = this.nativeActivator.getStats();
+    
     return {
       ...this.performanceStats,
       avgDetectionTime: parseFloat(this.performanceStats.avgDetectionTime.toFixed(2)),
-      avgActivationTime: parseFloat(this.performanceStats.avgActivationTime.toFixed(2))
+      avgActivationTime: parseFloat(this.performanceStats.avgActivationTime.toFixed(2)),
+      nativeActivation: nativeStats
     };
   }
 
@@ -744,7 +655,7 @@ class WindowManagerWindows {
   }
 
   /**
-   * Nettoyage amélioré avec statistiques de performance
+   * Nettoyage avec activateur natif
    */
   cleanup() {
     try {
@@ -752,7 +663,10 @@ class WindowManagerWindows {
       this.handleMapping.clear();
       this.windows.clear();
       
-      console.log('WindowManagerWindows: Cleanup completed');
+      // Nettoyer l'activateur natif
+      this.nativeActivator.cleanup();
+      
+      console.log('WindowManagerWindows: Cleanup completed (Native activation)');
       console.log('Performance Stats:', this.getPerformanceStats());
     } catch (error) {
       console.error('WindowManagerWindows: Cleanup error:', error);

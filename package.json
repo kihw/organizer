@@ -24,7 +24,8 @@
     "benchmark": "node tests/benchmark.js",
     "benchmark:ultra-fast": "node tests/benchmark-ultra-fast.js",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "lint:fix": "eslint src/ --fix",
+    "install:native": "npm install ffi-napi ref-napi robotjs --save-optional"
   },
   "keywords": [
     "dofus", 
@@ -37,7 +38,8 @@
     "performance",
     "shortcuts",
     "ultra-fast",
-    "v2.0"
+    "v2.0",
+    "native-activation"
   ],
   "author": {
     "name": "Dofus Organizer Team",
@@ -62,6 +64,11 @@
   "dependencies": {
     "electron-store": "^8.1.0",
     "i18next": "^23.7.6"
+  },
+  "optionalDependencies": {
+    "ffi-napi": "^4.0.3",
+    "ref-napi": "^3.0.3",
+    "robotjs": "^0.6.0"
   },
   "engines": {
     "node": ">=16.0.0",
