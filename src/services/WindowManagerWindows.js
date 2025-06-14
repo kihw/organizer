@@ -578,52 +578,47 @@ class WindowManagerWindows {
   async executeOptimizedWindowActivation(handle) {
     try {
       console.log(`WindowManagerWindows: Executing optimized activation for handle ${handle}`);
-      
-      const success = await this.tryOnlySetForegroundWindow(handle);
+
+      const success = await this.bringWindowToFront(handle);
       if (success) {
-        console.log('WindowManagerWindows: SetForegroundWindow SUCCESS ✅');
+        console.log('WindowManagerWindows: Window brought to front ✅');
         return true;
       }
-      
+
       return false;
-      
+
     } catch (error) {
+      console.error('WindowManagerWindows: Optimized activation error:', error);
       return false;
     }
   }
 
   /**
-   * SetForegroundWindow uniquement
+   * Mise au premier plan avec plusieurs appels WinAPI
    */
-  async tryOnlySetForegroundWindow(handle) {
+  async bringWindowToFront(handle) {
     try {
-      console.log(`WindowManagerWindows: Using SetForegroundWindow for handle ${handle}`);
-      
-      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\") ] public static extern bool SetForegroundWindow(IntPtr hWnd); }'; $result = [Win32]::SetForegroundWindow([IntPtr]${handle}); Write-Output $result"`;
-      
-      const { stdout, stderr } = await execAsync(command, { 
+      console.log(`WindowManagerWindows: Bringing window ${handle} to front`);
+
+      const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow); [DllImport(\\"user32.dll\\")] public static extern bool BringWindowToTop(IntPtr hWnd); }'; $h=[IntPtr]${handle}; [Win32]::ShowWindow($h,9) | Out-Null; [Win32]::BringWindowToTop($h) | Out-Null; $result=[Win32]::SetForegroundWindow($h); Write-Output $result"`;
+
+      const { stdout } = await execAsync(command, {
         timeout: 1000,
         encoding: 'utf8',
         windowsHide: true
       });
-      
+
       const result = stdout && stdout.trim();
-      
-      // Parsing correct des résultats booléens PowerShell
-      const success = result && (
-        result.toLowerCase() === 'true' || 
-        result === 'True' || 
-        result === 'TRUE' ||
-        result === '1'
-      );
-      
+      const success = result && /^(true|1)$/i.test(result);
+
       if (success) {
-        console.log('WindowManagerWindows: SetForegroundWindow SUCCESS ✅');
+        console.log('WindowManagerWindows: bringWindowToFront SUCCESS ✅');
       }
-      
-      return success;
-      
+
+      return !!success;
+
     } catch (error) {
+      console.error('WindowManagerWindows: bringWindowToFront failed:', error);
       return false;
     }
   }
