@@ -106,8 +106,8 @@ class Dorganize {
 
     // Utiliser l'icône appropriée selon l'état des raccourcis
     const iconPath = this.shortcutsEnabled
-      ? path.join(__dirname, '../assets/icons/organizer_vert.png')
-      : path.join(__dirname, '../assets/icons/organizer_rouge.png');
+      ? path.join(__dirname, '../assets/icons/dorganize_vert.png')
+      : path.join(__dirname, '../assets/icons/dorganize_rouge.png');
 
     this.tray = new Tray(iconPath);
     this.tray.setToolTip('Dorganize');
@@ -124,8 +124,8 @@ class Dorganize {
     if (!this.tray) return;
 
     const iconPath = this.shortcutsEnabled
-      ? path.join(__dirname, '../assets/icons/organizer_vert.png')
-      : path.join(__dirname, '../assets/icons/organizer_rouge.png');
+      ? path.join(__dirname, '../assets/icons/dorganize_vert.png')
+      : path.join(__dirname, '../assets/icons/dorganize_rouge.png');
 
     this.tray.setImage(iconPath);
     console.log(`Dorganize: Tray icon updated to ${this.shortcutsEnabled ? 'green' : 'red'}`);
