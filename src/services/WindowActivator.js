@@ -52,7 +52,7 @@ class WindowActivator {
 
     runPythonScript(title) {
         return new Promise((resolve) => {
-            const scriptPath = path.join(__dirname, '..', 'script', 'afficher_fenete.py');
+            const scriptPath = path.join(__dirname, '..', 'script', 'afficher_fenetre.py');
             const proc = spawn('python', [scriptPath, title]);
 
             let resolved = false;

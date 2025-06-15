@@ -306,50 +306,40 @@ try {
 
   // Generate stable window ID based on character name and class
   generateStableWindowId(character, dofusClass, processId) {
-    const normalizedChar = character.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const normalizedClass = dofusClass.toLowerCase();
-    return `${normalizedChar}_${normalizedClass}_${processId}`;
+    // CORRECTION: Vérifier si dofusClass est null
+    if (!character || !dofusClass) {
+      console.warn(`WindowManagerWindows: Cannot generate stable ID - missing character (${character}) or class (${dofusClass})`);
+      return null;
+    }
+    
+    const cleanCharacter = character.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanClass = dofusClass.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${cleanCharacter}_${cleanClass}_${processId}`;
   }
 
   async getDofusWindows() {
     try {
-      // Throttle window checks to avoid performance issues
-      const now = Date.now();
-      if (now - this.lastWindowCheck < 500) { // Reduced throttle time
-        const cachedWindows = Array.from(this.windows.values()).map(w => w.info);
-        console.log(`WindowManagerWindows: Returning ${cachedWindows.length} cached windows`);
-        return cachedWindows;
-      }
-      this.lastWindowCheck = now;
-
       console.log('WindowManagerWindows: Scanning for Dofus windows...');
 
-      let rawWindows = [];
+      // CORRECTION: Utiliser directement la méthode alternative qui fonctionne
+      let rawWindows = await this.getWindowsWithAlternativeMethod();
 
-      // Try PowerShell first if available
-      if (this.psScriptReady && this.psScriptPath) {
-        rawWindows = await this.getWindowsWithPowerShell();
+      if (!rawWindows || rawWindows.length === 0) {
+        console.log('WindowManagerWindows: No windows found with alternative method');
+        return [];
       }
 
-      // If PowerShell failed or returned no results, try alternative method
-      if (rawWindows.length === 0) {
-        console.log('WindowManagerWindows: PowerShell returned no windows, trying alternative method...');
-        rawWindows = await this.getWindowsWithAlternativeMethod();
-      }
-
-      const dofusWindows = this.processRawWindows(rawWindows);
-
-      console.log(`WindowManagerWindows: Found ${dofusWindows.length} Dofus windows`);
-
-      // Sort by initiative (descending), then by character name
-      dofusWindows.sort((a, b) => {
-        if (b.initiative !== a.initiative) {
-          return b.initiative - a.initiative;
-        }
-        return a.character.localeCompare(b.character);
+      console.log(`WindowManagerWindows: Found ${rawWindows.length} raw windows`);
+      rawWindows.forEach(window => {
+        console.log(`WindowManagerWindows: Raw window - Title: "${window.Title}", Handle: ${window.Handle}, ProcessId: ${window.ProcessId}`);
       });
 
-      return dofusWindows;
+      const processedWindows = this.processRawWindows(rawWindows);
+      
+      console.log(`WindowManagerWindows: Found ${processedWindows.length} Dofus windows`);
+      
+      return processedWindows;
+
     } catch (error) {
       console.error('WindowManagerWindows: Error getting Dofus windows:', error);
       return [];
@@ -384,45 +374,65 @@ try {
 
   async getWindowsWithAlternativeMethod() {
     try {
-      console.log('WindowManagerWindows: Using alternative PowerShell method...');
+      console.log('WindowManagerWindows: Using PowerShell method...');
 
-      // Use a simpler PowerShell command to get Dofus windows
-      const command = `powershell.exe -Command "Get-Process | Where-Object { $_.MainWindowTitle -and ($_.ProcessName -like '*Dofus*' -or $_.MainWindowTitle -like '*Dofus*' -or $_.MainWindowTitle -like '*Steamer*' -or $_.MainWindowTitle -like '*Boulonix*') } | ForEach-Object { @{ Handle = $_.MainWindowHandle.ToInt64(); Title = $_.MainWindowTitle; ProcessId = $_.Id; ClassName = 'Unknown'; IsActive = $false; Bounds = @{ X = 0; Y = 0; Width = 800; Height = 600 } } } | ConvertTo-Json"`;
+      // CORRECTION: Commande PowerShell optimisée pour détecter toutes les fenêtres Dofus
+      const command = `powershell.exe -Command "Get-Process | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne '' } | Where-Object { $_.MainWindowTitle -like '*Release*' -or $_.MainWindowTitle -like '*Dofus*' } | Where-Object { $_.MainWindowTitle -notlike '*Ankama Launcher*' -and $_.MainWindowTitle -notlike '*Organizer*' } | ForEach-Object { @{ Handle = [string]$_.MainWindowHandle.ToInt64(); Title = $_.MainWindowTitle; ProcessId = $_.Id; ClassName = 'Unknown'; IsActive = $false; Bounds = @{ X = 0; Y = 0; Width = 800; Height = 600 } } } | ConvertTo-Json -Depth 2"`;
 
-      const { stdout, stderr } = await execAsync(command, { timeout: 5000 });
+      const { stdout, stderr } = await execAsync(command, { timeout: 10000 });
 
       if (stderr && stderr.trim()) {
-        console.warn('WindowManagerWindows: Alternative PowerShell stderr:', stderr);
+        console.warn('WindowManagerWindows: PowerShell stderr:', stderr);
       }
 
-      if (stdout && stdout.trim() && stdout.trim() !== '[]') {
+      if (stdout && stdout.trim() && stdout.trim() !== '[]' && stdout.trim() !== 'null') {
         try {
           const result = JSON.parse(stdout.trim());
-          const windows = Array.isArray(result) ? result : [result];
+          let windows = Array.isArray(result) ? result : [result];
 
-          // Filter out organizer windows
-          return windows.filter(window => {
-            if (!window.Title) return false;
+          console.log(`WindowManagerWindows: PowerShell found ${windows.length} potential windows`);
 
-            const title = window.Title.toLowerCase();
-
-            // Exclude organizer windows
-            if (title.includes('organizer') || title.includes('configuration')) {
+          // Filter and validate windows
+          windows = windows.filter(window => {
+            // CORRECTION: Validation plus stricte des handles
+            if (!window.Title || !window.Handle || window.Handle === '0' || window.Handle === 0) {
+              console.log(`WindowManagerWindows: Filtering out window with invalid data - Title: "${window.Title}", Handle: "${window.Handle}"`);
               return false;
             }
 
-            // Include Dofus-related windows
-            return title.includes('dofus') || title.includes('steamer') || title.includes('boulonix') || title.includes('ankama');
+            const title = window.Title;
+
+            // CORRECTION: Vérifier que c'est bien une fenêtre de personnage (format: Nom - Classe - Version - Release)
+            const parts = title.split(' - ');
+            if (parts.length < 4) {
+              console.log(`WindowManagerWindows: Filtering out window with invalid format: ${title}`);
+              return false;
+            }
+
+            // Vérifier que le dernier élément est "Release"
+            if (parts[parts.length - 1].trim() !== 'Release') {
+              console.log(`WindowManagerWindows: Filtering out non-release window: ${title}`);
+              return false;
+            }
+
+            console.log(`WindowManagerWindows: Found valid Dofus character window: ${title}`);
+            return true;
           });
+
+          console.log(`WindowManagerWindows: After filtering, ${windows.length} valid Dofus character windows found`);
+          return windows;
+
         } catch (parseError) {
-          console.error('WindowManagerWindows: Failed to parse alternative PowerShell output:', parseError);
+          console.error('WindowManagerWindows: Failed to parse PowerShell output:', parseError);
           console.log('WindowManagerWindows: Raw output:', stdout);
         }
+      } else {
+        console.log('WindowManagerWindows: PowerShell method returned no results');
       }
 
       return [];
     } catch (error) {
-      console.error('WindowManagerWindows: Alternative PowerShell method failed:', error);
+      console.error('WindowManagerWindows: PowerShell method failed:', error);
       return [];
     }
   }
@@ -432,19 +442,31 @@ try {
     const currentWindowIds = new Set();
 
     for (const rawWindow of rawWindows) {
-      // Ensure Handle exists and can be converted to string
-      if (!rawWindow.Handle) {
-        console.warn('WindowManagerWindows: Skipping window with no Handle:', rawWindow);
+      // CORRECTION: Validation stricte du handle
+      if (!rawWindow.Handle || rawWindow.Handle === true || rawWindow.Handle === 'true' || rawWindow.Handle === '0' || rawWindow.Handle === 0) {
+        console.warn('WindowManagerWindows: Skipping window with invalid Handle:', rawWindow.Handle, 'for title:', rawWindow.Title);
         continue;
       }
 
       const windowHandle = rawWindow.Handle.toString();
 
-      // Parse character info from title using the format: Nom - Classe - Version - Release
+      // Parse character info from title
       const { character, dofusClass } = this.parseWindowTitle(rawWindow.Title);
 
-      // Generate stable ID based on character and class
+      // Skip si pas de classe valide
+      if (!character || !dofusClass) {
+        console.log(`WindowManagerWindows: Skipping window without valid character/class: ${rawWindow.Title}`);
+        continue;
+      }
+
+      // Generate stable ID
       const stableId = this.generateStableWindowId(character, dofusClass, rawWindow.ProcessId);
+      if (!stableId) {
+        console.warn(`WindowManagerWindows: Could not generate stable ID for window: ${rawWindow.Title}`);
+        continue;
+      }
+
+      console.log(`WindowManagerWindows: Processing window - ID: ${stableId}, Handle: ${windowHandle}, Title: ${rawWindow.Title}`);
 
       // Map the stable ID to the current window handle
       this.windowIdMapping.set(stableId, windowHandle);
@@ -488,41 +510,44 @@ try {
   }
 
   parseWindowTitle(title) {
-    if (!title) {
-      return { character: 'Dofus Player', dofusClass: 'feca' };
+    if (!title || typeof title !== 'string') {
+      return { character: null, dofusClass: null };
     }
 
     console.log(`WindowManagerWindows: Parsing title: "${title}"`);
 
-    // Expected format: "Nom - Classe - Version - Release"
-    // Examples:
-    // "Gandalf - Iop - Dofus 3 - Beta"
-    // "Legolas - Cra - Dofus 2 - Release"
-    // "Gimli - Enutrof - Dofus Retro - 1.29"
-    // "Boulonix - Steamer - 3.1.10.13 - Release"
-
-    const parts = title.split(' - ').map(part => part.trim());
-
+    // Format: "Nom - Classe - Version - Release" ou "Nom du Personnage - Nom de la Classe - ..."
+    const parts = title.split(' - ');
+    
     if (parts.length >= 2) {
-      const characterName = parts[0];
-      const className = parts[1];
-
+      const character = parts[0].trim();
+      const classRaw = parts[1].trim();
+      
       // Normalize class name
-      const normalizedClass = this.normalizeClassName(className);
-
-      console.log(`WindowManagerWindows: Parsed - Character: "${characterName}", Class: "${className}" -> "${normalizedClass}"`);
-
-      return {
-        character: characterName || 'Dofus Player',
-        dofusClass: normalizedClass
-      };
+      const dofusClass = this.normalizeClassName(classRaw);
+      
+      console.log(`WindowManagerWindows: Parsed - Character: "${character}", Class: "${classRaw}" -> "${dofusClass}"`);
+      
+      // MODIFIÉ: Accepter la fenêtre si elle a une classe valide, même si le format n'est pas parfait
+      if (character && dofusClass && dofusClass !== 'unknown') {
+        return { character, dofusClass };
+      }
     }
 
-    // Fallback: try to extract from other formats
-    const fallbackResult = this.extractCharacterNameFallback(title);
-    console.log(`WindowManagerWindows: Fallback parsing result:`, fallbackResult);
+    // Fallback: essayer de détecter dans le titre complet
+    const normalizedTitle = title.toLowerCase();
+    const knownClasses = ['steamer', 'ecaflip', 'eniripsa', 'iop', 'cra', 'sadida', 'sacrieur', 'pandawa', 'osamodas', 'enutrof', 'sram', 'xelor', 'feca', 'roublard', 'zobal', 'ouginak', 'huppermage', 'eliotrope', 'forgelance'];
+    
+    for (const className of knownClasses) {
+      if (normalizedTitle.includes(className)) {
+        const character = parts[0]?.trim() || 'Unknown';
+        console.log(`WindowManagerWindows: Fallback detection - Character: "${character}", Class: "${className}"`);
+        return { character, dofusClass: className };
+      }
+    }
 
-    return fallbackResult;
+    console.log(`WindowManagerWindows: Failed to parse title: "${title}"`);
+    return { character: null, dofusClass: null };
   }
 
   normalizeClassName(className) {

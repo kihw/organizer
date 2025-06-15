@@ -5,6 +5,7 @@ class LanguageManager {
   constructor() {
     this.currentLanguage = 'FR';
     this.languages = {};
+    this.languageConfig = null;
     this.availableLanguages = [
       { code: 'FR', name: 'Français' },
       { code: 'EN', name: 'English' },
@@ -17,17 +18,66 @@ class LanguageManager {
 
   loadLanguages() {
     try {
-      const languageFile = path.join(__dirname, '../../locales/languages.json');
-      if (fs.existsSync(languageFile)) {
-        const data = fs.readFileSync(languageFile, 'utf8');
-        this.languages = JSON.parse(data);
+      // Charger d'abord le fichier de configuration global
+      const globalConfigPath = path.join(__dirname, '../../locales/global.json');
+      if (fs.existsSync(globalConfigPath)) {
+        const globalConfigData = fs.readFileSync(globalConfigPath, 'utf8');
+        this.languageConfig = JSON.parse(globalConfigData);
+        console.log('LanguageManager: Loaded global language configuration');
+        
+        // Charger chaque fichier de langue selon la configuration
+        this.loadLanguageFiles();
       } else {
-        console.warn('Language file not found, using embedded languages');
+        console.warn('LanguageManager: global.json not found, using embedded languages');
         this.languages = this.getEmbeddedLanguages();
       }
     } catch (error) {
-      console.error('Error loading languages:', error);
+      console.error('LanguageManager: Error loading languages:', error);
       this.languages = this.getEmbeddedLanguages();
+    }
+  }
+
+  loadLanguageFiles() {
+    this.languages = {};
+    
+    if (!this.languageConfig || !this.languageConfig.languages) {
+      console.warn('LanguageManager: No language configuration found');
+      this.languages = this.getEmbeddedLanguages();
+      return;
+    }
+
+    // Charger chaque fichier de langue
+    Object.entries(this.languageConfig.languages).forEach(([langCode, langPath]) => {
+      try {
+        const fullPath = path.join(__dirname, '../../locales', langPath);
+        if (fs.existsSync(fullPath)) {
+          const langData = fs.readFileSync(fullPath, 'utf8');
+          this.languages[langCode] = JSON.parse(langData);
+          console.log(`LanguageManager: Loaded language ${langCode} from ${langPath}`);
+        } else {
+          console.warn(`LanguageManager: Language file not found: ${fullPath}`);
+          // Utiliser la langue intégrée comme fallback
+          const embeddedLanguages = this.getEmbeddedLanguages();
+          if (embeddedLanguages[langCode]) {
+            this.languages[langCode] = embeddedLanguages[langCode];
+            console.log(`LanguageManager: Using embedded language for ${langCode}`);
+          }
+        }
+      } catch (error) {
+        console.error(`LanguageManager: Error loading language ${langCode}:`, error);
+        // Utiliser la langue intégrée comme fallback
+        const embeddedLanguages = this.getEmbeddedLanguages();
+        if (embeddedLanguages[langCode]) {
+          this.languages[langCode] = embeddedLanguages[langCode];
+        }
+      }
+    });
+
+    // Vérifier qu'au moins la langue par défaut est chargée
+    if (!this.languages.FR) {
+      console.warn('LanguageManager: Default language FR not loaded, using embedded');
+      const embeddedLanguages = this.getEmbeddedLanguages();
+      this.languages.FR = embeddedLanguages.FR;
     }
   }
 
@@ -328,6 +378,7 @@ class LanguageManager {
   }
 
   reloadLanguages() {
+    console.log('LanguageManager: Reloading languages...');
     this.loadLanguages();
   }
 }

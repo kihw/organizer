@@ -102,20 +102,33 @@ class DofusOrganizer {
   }
 
   createTray() {
-    const iconPath = path.join(__dirname, '../assets/icons/organizer.png');
-    console.log('DofusOrganizer: Creating tray with icon:', iconPath);
-    this.tray = new Tray(iconPath);
-    this.updateTrayMenu();
+    console.log('DofusOrganizer: Creating tray icon');
 
+    // Utiliser l'icône appropriée selon l'état des raccourcis
+    const iconPath = this.shortcutsEnabled
+      ? path.join(__dirname, '../assets/icons/organizer_vert.png')
+      : path.join(__dirname, '../assets/icons/organizer_rouge.png');
+
+    this.tray = new Tray(iconPath);
     this.tray.setToolTip('Dofus Organizer');
+
     this.tray.on('click', () => {
-      console.log('DofusOrganizer: Tray clicked, showing config window');
       this.showConfigWindow();
     });
 
-    this.tray.on('right-click', () => {
-      this.tray.popUpContextMenu();
-    });
+    this.updateTrayMenu();
+  }
+
+  // Nouvelle méthode pour mettre à jour l'icône du tray
+  updateTrayIcon() {
+    if (!this.tray) return;
+
+    const iconPath = this.shortcutsEnabled
+      ? path.join(__dirname, '../assets/icons/organizer_vert.png')
+      : path.join(__dirname, '../assets/icons/organizer_rouge.png');
+
+    this.tray.setImage(iconPath);
+    console.log(`DofusOrganizer: Tray icon updated to ${this.shortcutsEnabled ? 'green' : 'red'}`);
   }
 
   updateTrayMenu() {
@@ -195,7 +208,7 @@ class DofusOrganizer {
     console.log('DofusOrganizer: Launching Python interface...');
 
     try {
-      const pythonScript = path.join(__dirname, '..', 'script', 'afficher_fenetre.py');
+      const pythonScript = path.join(__dirname, 'script', 'afficher_fenetre.py');
 
       // Lancer le script Python en mode détaché
       const pythonProcess = spawn('python', [pythonScript], {
@@ -438,6 +451,8 @@ class DofusOrganizer {
         this.deactivateShortcuts();
       }
 
+      // Mettre à jour l'icône du tray
+      this.updateTrayIcon();
       this.updateTrayMenu();
 
       // Notify user
@@ -448,7 +463,7 @@ class DofusOrganizer {
       // Reset the flag after a short delay
       setTimeout(() => {
         this.isTogglingShortcuts = false;
-      }, 500);
+      }, 200);
     }
   }
 
@@ -787,6 +802,11 @@ class DofusOrganizer {
     // Load shortcuts enabled state
     this.shortcutsEnabled = this.store.get('shortcutsEnabled', true);
     console.log(`DofusOrganizer: Shortcuts enabled: ${this.shortcutsEnabled}`);
+
+    // Mettre à jour l'icône du tray après le chargement des paramètres
+    if (this.tray) {
+      this.updateTrayIcon();
+    }
 
     // Set default global shortcuts if not set in config file
     if (!this.shortcutConfig.getGlobalShortcut('nextWindow')) {
