@@ -205,8 +205,10 @@ class DofusOrganizer {
     
     this.mainWindow.once('ready-to-show', () => {
       console.log('DofusOrganizer: Config window ready to show');
+
       this.mainWindow.show();
       spawn('python', ['afficher_fenetre.py', this.mainWindow.getTitle()], { detached: true });
+
       
       // Force refresh windows when config opens
       setTimeout(() => {
