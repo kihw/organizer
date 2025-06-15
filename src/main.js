@@ -6,8 +6,8 @@ const ShortcutManager = require('./services/ShortcutManager');
 const ShortcutConfigManager = require('./services/ShortcutConfigManager');
 const LanguageManager = require('./services/LanguageManager');
 
-// Import du DummyWindowActivator au lieu des anciens activateurs
-const { DummyWindowActivator } = require('./services/DummyWindowActivator');
+// Import the WindowActivator placeholder implementation
+const { WindowActivator } = require('./services/WindowActivator');
 
 // Import the appropriate WindowManager based on platform
 let WindowManager;
@@ -43,8 +43,8 @@ class DofusOrganizer {
     this.isTogglingShortcuts = false;
     this.shortcutsLoaded = false;
 
-    // Remplacer NativeWindowActivator par DummyWindowActivator
-    this.windowActivator = new DummyWindowActivator();
+    // Use the WindowActivator placeholder instead of a native implementation
+    this.windowActivator = new WindowActivator();
 
     console.log('DofusOrganizer: Initializing application...');
     this.initializeApp();
@@ -231,8 +231,8 @@ class DofusOrganizer {
     console.log('DofusOrganizer: showConfigWindow called');
 
     if (this.mainWindow) {
-      console.log('DofusOrganizer: Config window already exists, using dummy activator...');
-      // Utiliser le DummyWindowActivator au lieu de focus()
+      console.log('DofusOrganizer: Config window already exists, using placeholder activator...');
+      // Utiliser le WindowActivator au lieu de focus()
       this.windowActivator.focusWindow('config-window');
       return;
     }
@@ -261,7 +261,7 @@ class DofusOrganizer {
       // SUPPRIMÉ: this.mainWindow.show();
       // SUPPRIMÉ: Toute logique de focus ou setAlwaysOnTop
 
-      // Utiliser le DummyWindowActivator
+      // Utiliser le WindowActivator
       this.windowActivator.bringWindowToFront('config-window');
 
       // Force refresh windows when config opens
@@ -366,7 +366,7 @@ class DofusOrganizer {
     });
 
     // SUPPRIMÉ: setVisibleOnAllWorkspaces et autres méthodes de focus
-    // Utiliser le DummyWindowActivator
+    // Utiliser le WindowActivator
     this.windowActivator.bringWindowToFront('dock-window');
   }
 
@@ -412,7 +412,7 @@ class DofusOrganizer {
 
     if (nextWindow) {
       console.log(`DofusOrganizer: Activating next window: ${nextWindow.character}`);
-      // Utiliser le DummyWindowActivator au lieu de windowManager.activateWindow
+      // Utiliser le WindowActivator au lieu de windowManager.activateWindow
       this.windowActivator.activateWindow(nextWindow.id);
     }
   }
@@ -607,7 +607,7 @@ class DofusOrganizer {
       console.log(`IPC: activate-window called for: ${windowId}`);
 
       try {
-        // MODIFIÉ: Utiliser DummyWindowActivator au lieu de windowManager
+        // MODIFIÉ: Utiliser WindowActivator au lieu de windowManager
         const result = await this.windowActivator.activateWindow(windowId);
 
         // Enhanced activation with immediate feedback
@@ -666,7 +666,7 @@ class DofusOrganizer {
         return false;
       }
 
-      // Register the shortcut - MODIFIÉ: utiliser DummyWindowActivator
+      // Register the shortcut - MODIFIÉ: utiliser WindowActivator
       return this.shortcutManager.setWindowShortcut(windowId, shortcut, async () => {
         console.log(`ShortcutManager: Executing shortcut for window ${windowId} (dummy)`);
         await this.windowActivator.activateWindow(windowId);
@@ -692,8 +692,8 @@ class DofusOrganizer {
 
     ipcMain.handle('organize-windows', (event, layout) => {
       console.log(`IPC: organize-windows called with layout: ${layout}`);
-      // MODIFIÉ: Ne plus utiliser windowManager.organizeWindows, utiliser DummyWindowActivator
-      console.log('IPC: Window organization disabled - using dummy activator');
+      // MODIFIÉ: Ne plus utiliser windowManager.organizeWindows, utiliser WindowActivator
+      console.log('IPC: Window organization disabled - using placeholder activator');
       this.windowActivator.bringWindowToFront('organization-request');
       return true; // Simuler le succès
     });
@@ -820,7 +820,7 @@ class DofusOrganizer {
       if (existingShortcut) {
         console.log(`DofusOrganizer: Linking existing shortcut ${existingShortcut} to window ${window.id} (${window.character})`);
 
-        // MODIFIÉ: utiliser DummyWindowActivator
+        // MODIFIÉ: utiliser WindowActivator
         const success = this.shortcutManager.setWindowShortcut(window.id, existingShortcut, async () => {
           console.log(`ShortcutManager: Executing shortcut for window ${window.id} (dummy)`);
           await this.windowActivator.activateWindow(window.id);
@@ -1007,7 +1007,7 @@ class DofusOrganizer {
       console.error('DofusOrganizer: Error unregistering global shortcuts:', error);
     }
 
-    // Clean up DummyWindowActivator
+    // Clean up WindowActivator
     if (this.windowActivator && typeof this.windowActivator.cleanup === 'function') {
       this.windowActivator.cleanup();
     }

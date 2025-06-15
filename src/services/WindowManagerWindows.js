@@ -608,7 +608,7 @@ try {
 
   async activateWindow(windowId) {
     try {
-      console.log(`WindowManagerWindows: Activating window ${windowId} (using dummy activator)`);
+      console.log(`WindowManagerWindows: Activating window ${windowId} (using placeholder activator)`);
 
       // Get the actual window handle from the stable ID
       const windowHandle = this.windowIdMapping.get(windowId);
@@ -644,7 +644,7 @@ try {
 
   async moveWindow(windowId, x, y, width = -1, height = -1) {
     try {
-      console.log(`WindowManagerWindows: Moving window ${windowId} (using dummy activator)`);
+      console.log(`WindowManagerWindows: Moving window ${windowId} (using placeholder activator)`);
 
       const windowHandle = this.windowIdMapping.get(windowId);
       if (!windowHandle) {
@@ -653,7 +653,7 @@ try {
       }
 
       // MODIFIÉ: Utiliser WindowActivator au lieu de la logique PowerShell
-      console.log(`WindowManagerWindows: Move window ${windowId} to ${x},${y} (${width}x${height}) - using dummy activator`);
+      console.log(`WindowManagerWindows: Move window ${windowId} to ${x},${y} (${width}x${height}) - using placeholder activator`);
       return this.windowActivator.bringWindowToFront(windowId);
     } catch (error) {
       console.error('WindowManagerWindows: Error moving window:', error);
@@ -669,7 +669,7 @@ try {
     if (enabledWindows.length === 0) return false;
 
     try {
-      console.log(`WindowManagerWindows: Organizing ${enabledWindows.length} windows in ${layout} layout (using dummy activator)`);
+      console.log(`WindowManagerWindows: Organizing ${enabledWindows.length} windows in ${layout} layout (using placeholder activator)`);
 
       // MODIFIÉ: Utiliser WindowActivator au lieu de la logique de repositionnement
       this.windowActivator.bringWindowToFront('organize-windows-request');
