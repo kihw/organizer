@@ -1,6 +1,6 @@
 /**
- * NativeWindowActivator - Activation native avec détection dynamique du PID
- * Trouve automatiquement le nouveau PID si le processus a redémarré
+ * NativeWindowActivator - FIXED VERSION - Activation native avec détection dynamique du PID
+ * FIX: Improved process detection and window title matching for Steamer/Boulonix clients
  */
 
 const { promisify } = require('util');
@@ -22,7 +22,7 @@ class NativeWindowActivator {
     };
     
     this.initializeNative();
-    console.log('NativeWindowActivator: Initialized with DYNAMIC PID detection');
+    console.log('NativeWindowActivator: Initialized with ENHANCED dynamic PID detection');
   }
 
   /**
@@ -47,13 +47,13 @@ class NativeWindowActivator {
       console.log('NativeWindowActivator: Native FFI loaded ✅');
       
     } catch (error) {
-      console.log('NativeWindowActivator: FFI not available, using PowerShell');
+      console.log('NativeWindowActivator: FFI not available, using enhanced PowerShell');
       this.isNativeAvailable = false;
     }
   }
 
   /**
-   * MÉTHODE PRINCIPALE - Trouve et active la fenêtre
+   * MÉTHODE PRINCIPALE - FIXED - Trouve et active la fenêtre
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
@@ -61,13 +61,13 @@ class NativeWindowActivator {
     try {
       this.stats.activations++;
       
-      console.log(`NativeWindowActivator: Finding and activating window ${windowId}`);
+      console.log(`NativeWindowActivator: ENHANCED finding and activating window ${windowId}`);
       
-      // 1. Trouver le handle actuel de la fenêtre (avec détection dynamique du PID)
-      const currentHandle = await this.findCurrentWindowHandle(windowId);
+      // FIXED: Use enhanced window detection that works with current processes
+      const currentHandle = await this.findCurrentWindowHandleEnhanced(windowId);
       
       if (!currentHandle) {
-        console.error(`NativeWindowActivator: Could not find window ${windowId}`);
+        console.error(`NativeWindowActivator: Could not find window ${windowId} with enhanced detection`);
         this.stats.failures++;
         return false;
       }
@@ -99,11 +99,11 @@ class NativeWindowActivator {
   }
 
   /**
-   * Trouve le handle actuel d'une fenêtre par son ID (avec détection dynamique du PID)
+   * FIXED: Enhanced window detection that works with Steamer/Boulonix
    */
-  async findCurrentWindowHandle(windowId) {
+  async findCurrentWindowHandleEnhanced(windowId) {
     try {
-      // Extraire les infos du windowId (format: character_class_pid)
+      // Extract character and class from windowId
       const parts = windowId.split('_');
       if (parts.length < 3) {
         console.warn(`NativeWindowActivator: Invalid windowId format: ${windowId}`);
@@ -114,106 +114,58 @@ class NativeWindowActivator {
       const dofusClass = parts[1];
       const originalPid = parts[2];
       
-      console.log(`NativeWindowActivator: Looking for window - Character: ${character}, Class: ${dofusClass}, Original PID: ${originalPid}`);
+      console.log(`NativeWindowActivator: ENHANCED search - Character: ${character}, Class: ${dofusClass}, Original PID: ${originalPid}`);
       
-      // ÉTAPE 1: Essayer avec le PID original
-      let handle = await this.findByPid(originalPid, character);
+      // STEP 1: Try by window title first (most reliable for current processes)
+      let handle = await this.findByWindowTitleEnhanced(character, dofusClass);
       if (handle) {
-        console.log(`NativeWindowActivator: Found with original PID ${originalPid}`);
+        console.log(`NativeWindowActivator: Found by enhanced title search`);
         return handle;
       }
       
-      // ÉTAPE 2: Le PID a changé, chercher par nom de personnage et classe
-      console.log(`NativeWindowActivator: PID ${originalPid} not found, searching by character name...`);
-      handle = await this.findByCharacterName(character, dofusClass);
+      // STEP 2: Try broader process search with Java processes included
+      handle = await this.findByProcessNameEnhanced(character, dofusClass);
       if (handle) {
-        console.log(`NativeWindowActivator: Found by character name: ${character}`);
+        console.log(`NativeWindowActivator: Found by enhanced process search`);
         return handle;
       }
       
-      // ÉTAPE 3: Chercher dans tous les processus Dofus
-      console.log(`NativeWindowActivator: Character not found, searching in all Dofus processes...`);
-      handle = await this.findInAllDofusProcesses(character);
+      // STEP 3: Try direct window enumeration (most comprehensive)
+      handle = await this.findByWindowEnumeration(character, dofusClass);
       if (handle) {
-        console.log(`NativeWindowActivator: Found in Dofus processes`);
+        console.log(`NativeWindowActivator: Found by window enumeration`);
         return handle;
       }
       
-      console.warn(`NativeWindowActivator: Could not find window for ${character} anywhere`);
+      console.warn(`NativeWindowActivator: Could not find window for ${character} with any enhanced method`);
       return null;
       
     } catch (error) {
-      console.error('NativeWindowActivator: Error finding window handle:', error.message);
+      console.error('NativeWindowActivator: Error in enhanced window detection:', error.message);
       return null;
     }
   }
 
   /**
-   * Cherche une fenêtre par PID spécifique
+   * FIXED: Enhanced window title search
    */
-  async findByPid(pid, character) {
+  async findByWindowTitleEnhanced(character, dofusClass) {
     try {
+      console.log(`NativeWindowActivator: Enhanced title search for "${character}" and "${dofusClass}"`);
+      
+      // More flexible title matching that works with Steamer format
       const command = `powershell.exe -NoProfile -Command "
         Get-Process | Where-Object { 
-          $_.Id -eq ${pid} -and 
-          $_.MainWindowHandle -ne 0 -and 
-          $_.MainWindowTitle -ne '' 
-        } | ForEach-Object { 
-          [PSCustomObject]@{ 
-            Handle = $_.MainWindowHandle.ToInt64(); 
-            Title = $_.MainWindowTitle; 
-            PID = $_.Id 
-          } 
-        } | ConvertTo-Json -Compress"`;
-      
-      const { stdout } = await execAsync(command, {
-        timeout: 2000,
-        encoding: 'utf8',
-        windowsHide: true
-      });
-      
-      if (!stdout || stdout.trim() === '' || stdout.trim() === '[]') {
-        console.log(`NativeWindowActivator: No window found for PID ${pid}`);
-        return null;
-      }
-      
-      const result = JSON.parse(stdout.trim());
-      const windows = Array.isArray(result) ? result : [result];
-      
-      // Chercher la fenêtre qui correspond à notre personnage
-      for (const window of windows) {
-        if (window.Title && window.Title.toLowerCase().includes(character.toLowerCase())) {
-          return window.Handle;
-        }
-      }
-      
-      // Si pas de correspondance exacte, prendre la première fenêtre du processus
-      if (windows.length > 0) {
-        return windows[0].Handle;
-      }
-      
-      return null;
-      
-    } catch (error) {
-      console.warn(`NativeWindowActivator: Error searching PID ${pid}:`, error.message);
-      return null;
-    }
-  }
-
-  /**
-   * Cherche une fenêtre par nom de personnage et classe
-   */
-  async findByCharacterName(character, dofusClass) {
-    try {
-      console.log(`NativeWindowActivator: Searching for character "${character}" with class "${dofusClass}"`);
-      
-      const command = `powershell.exe -NoProfile -Command "
-        Get-Process | Where-Object { 
-          ($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*') -and
           $_.MainWindowHandle -ne 0 -and 
           $_.MainWindowTitle -ne '' -and
-          $_.MainWindowTitle -match '${character}'
-        } | ForEach-Object { 
+          (
+            $_.MainWindowTitle -match '${character}.*-.*${dofusClass}' -or
+            $_.MainWindowTitle -match '${character}.*${dofusClass}' -or
+            $_.MainWindowTitle -match '${character}' -and $_.MainWindowTitle -match '${dofusClass}' -or
+            $_.MainWindowTitle -match '${character}.*-.*[Ss]teamer' -or
+            $_.MainWindowTitle -match '${character}.*[Bb]oulonix'
+          )
+        } | Select-Object -First 1 | ForEach-Object { 
           [PSCustomObject]@{ 
             Handle = $_.MainWindowHandle.ToInt64(); 
             Title = $_.MainWindowTitle; 
@@ -229,54 +181,48 @@ class NativeWindowActivator {
       });
       
       if (!stdout || stdout.trim() === '' || stdout.trim() === '[]') {
-        console.log(`NativeWindowActivator: No window found for character ${character}`);
+        console.log(`NativeWindowActivator: No window found by enhanced title search`);
         return null;
       }
       
       const result = JSON.parse(stdout.trim());
-      const windows = Array.isArray(result) ? result : [result];
+      const window = Array.isArray(result) ? result[0] : result;
       
-      // Chercher la meilleure correspondance
-      for (const window of windows) {
-        const title = window.Title.toLowerCase();
-        const charLower = character.toLowerCase();
-        const classLower = dofusClass.toLowerCase();
-        
-        // Vérifier que le titre contient le personnage ET la classe
-        if (title.includes(charLower) && title.includes(classLower)) {
-          console.log(`NativeWindowActivator: Perfect match found: "${window.Title}" (PID: ${window.PID})`);
-          return window.Handle;
-        }
-      }
-      
-      // Si pas de correspondance parfaite, prendre la première qui contient le personnage
-      for (const window of windows) {
-        if (window.Title.toLowerCase().includes(character.toLowerCase())) {
-          console.log(`NativeWindowActivator: Character match found: "${window.Title}" (PID: ${window.PID})`);
-          return window.Handle;
-        }
+      if (window && window.Handle) {
+        console.log(`NativeWindowActivator: Enhanced title match found: "${window.Title}" (PID: ${window.PID}, Process: ${window.ProcessName})`);
+        return window.Handle;
       }
       
       return null;
       
     } catch (error) {
-      console.warn(`NativeWindowActivator: Error searching character ${character}:`, error.message);
+      console.warn(`NativeWindowActivator: Enhanced title search failed:`, error.message);
       return null;
     }
   }
 
   /**
-   * Cherche dans tous les processus Dofus (fallback)
+   * FIXED: Enhanced process search including Java and all game client types
    */
-  async findInAllDofusProcesses(character) {
+  async findByProcessNameEnhanced(character, dofusClass) {
     try {
-      console.log(`NativeWindowActivator: Fallback search in all Dofus processes for "${character}"`);
+      console.log(`NativeWindowActivator: Enhanced process search for "${character}" and "${dofusClass}"`);
       
+      // Much broader search that includes Java processes and any process with game windows
       const command = `powershell.exe -NoProfile -Command "
         Get-Process | Where-Object { 
-          ($_.ProcessName -like '*dofus*' -or $_.ProcessName -like '*steamer*' -or $_.ProcessName -like '*boulonix*' -or $_.ProcessName -like '*java*') -and
+          (
+            $_.ProcessName -like '*java*' -or 
+            $_.ProcessName -like '*dofus*' -or 
+            $_.ProcessName -like '*steamer*' -or 
+            $_.ProcessName -like '*boulonix*' -or
+            $_.ProcessName -like '*javaw*' -or
+            $_.ProcessName -eq 'java' -or
+            $_.MainWindowTitle -match '[Dd]ofus|[Ss]teamer|[Bb]oulonix'
+          ) -and
           $_.MainWindowHandle -ne 0 -and 
-          $_.MainWindowTitle -ne ''
+          $_.MainWindowTitle -ne '' -and
+          $_.MainWindowTitle -match '${character}'
         } | ForEach-Object { 
           [PSCustomObject]@{ 
             Handle = $_.MainWindowHandle.ToInt64(); 
@@ -287,42 +233,94 @@ class NativeWindowActivator {
         } | ConvertTo-Json -Compress"`;
       
       const { stdout } = await execAsync(command, {
-        timeout: 5000,
+        timeout: 4000,
         encoding: 'utf8',
         windowsHide: true
       });
       
       if (!stdout || stdout.trim() === '' || stdout.trim() === '[]') {
-        console.log(`NativeWindowActivator: No Dofus processes found`);
+        console.log(`NativeWindowActivator: No processes found by enhanced search`);
         return null;
       }
       
       const result = JSON.parse(stdout.trim());
       const windows = Array.isArray(result) ? result : [result];
       
-      console.log(`NativeWindowActivator: Found ${windows.length} Dofus windows, searching for "${character}"`);
+      console.log(`NativeWindowActivator: Found ${windows.length} potential windows by enhanced process search`);
       
-      // Chercher le personnage dans toutes les fenêtres
+      // Find the best match
       for (const window of windows) {
         const title = window.Title.toLowerCase();
         const charLower = character.toLowerCase();
+        const classLower = dofusClass.toLowerCase();
         
-        if (title.includes(charLower)) {
-          console.log(`NativeWindowActivator: Found "${character}" in: "${window.Title}" (PID: ${window.PID})`);
+        if (title.includes(charLower) && (title.includes(classLower) || title.includes('steamer') || title.includes('boulonix'))) {
+          console.log(`NativeWindowActivator: Enhanced process match found: "${window.Title}" (PID: ${window.PID}, Process: ${window.ProcessName})`);
           return window.Handle;
         }
       }
       
-      // Si toujours rien, afficher toutes les fenêtres trouvées pour debug
-      console.log(`NativeWindowActivator: Character "${character}" not found. Available windows:`);
-      windows.forEach((window, index) => {
-        console.log(`  ${index + 1}. "${window.Title}" (PID: ${window.PID})`);
-      });
+      // If no perfect match, take the first one that contains the character
+      if (windows.length > 0 && windows[0].Handle) {
+        console.log(`NativeWindowActivator: Using first enhanced process match: "${windows[0].Title}"`);
+        return windows[0].Handle;
+      }
       
       return null;
       
     } catch (error) {
-      console.warn(`NativeWindowActivator: Error in fallback search:`, error.message);
+      console.warn(`NativeWindowActivator: Enhanced process search failed:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * NEW: Window enumeration as last resort
+   */
+  async findByWindowEnumeration(character, dofusClass) {
+    try {
+      console.log(`NativeWindowActivator: Window enumeration search for "${character}"`);
+      
+      // Get ALL windows that have handles and search through their titles
+      const command = `powershell.exe -NoProfile -Command "
+        Get-Process | Where-Object { 
+          $_.MainWindowHandle -ne 0 -and 
+          $_.MainWindowTitle -ne ''
+        } | ForEach-Object { 
+          [PSCustomObject]@{ 
+            Handle = $_.MainWindowHandle.ToInt64(); 
+            Title = $_.MainWindowTitle; 
+            PID = $_.Id;
+            ProcessName = $_.ProcessName
+          } 
+        } | Where-Object {
+          $_.Title -match '${character}' -and
+          ($_.Title -match '[Dd]ofus|[Ss]teamer|[Bb]oulonix' -or $_.ProcessName -match 'java|dofus')
+        } | ConvertTo-Json -Compress"`;
+      
+      const { stdout } = await execAsync(command, {
+        timeout: 5000,
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      
+      if (!stdout || stdout.trim() === '' || stdout.trim() === '[]') {
+        console.log(`NativeWindowActivator: No windows found by enumeration`);
+        return null;
+      }
+      
+      const result = JSON.parse(stdout.trim());
+      const windows = Array.isArray(result) ? result : [result];
+      
+      if (windows.length > 0 && windows[0].Handle) {
+        console.log(`NativeWindowActivator: Window enumeration found: "${windows[0].Title}" (PID: ${windows[0].PID})`);
+        return windows[0].Handle;
+      }
+      
+      return null;
+      
+    } catch (error) {
+      console.warn(`NativeWindowActivator: Window enumeration failed:`, error.message);
       return null;
     }
   }
@@ -418,7 +416,7 @@ class NativeWindowActivator {
       "`;
       
       const { stdout } = await execAsync(command, {
-        timeout: 3000,
+        timeout: 1000, // Reduced timeout for faster response
         encoding: 'utf8',
         windowsHide: true
       });
@@ -447,7 +445,7 @@ class NativeWindowActivator {
       "`;
       
       await execAsync(command, {
-        timeout: 2000,
+        timeout: 1000, // Reduced timeout
         encoding: 'utf8',
         windowsHide: true
       });
@@ -480,7 +478,7 @@ class NativeWindowActivator {
       successRate: parseFloat(successRate.toFixed(1)),
       avgTime: parseFloat(this.stats.avgTime.toFixed(2)),
       nativeAvailable: this.isNativeAvailable,
-      method: 'Dynamic PID detection + Native activation'
+      method: 'Enhanced dynamic detection + Native activation'
     };
   }
 
@@ -490,7 +488,7 @@ class NativeWindowActivator {
   cleanup() {
     this.handleCache.clear();
     console.log('NativeWindowActivator: Cleanup completed');
-    console.log('Final stats:', this.getStats());
+    console.log('Final enhanced stats:', this.getStats());
   }
 }
 
