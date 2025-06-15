@@ -321,43 +321,43 @@ class Dorganize {
     const windowCount = enabledWindows.length + 2; // +2 for refresh and config buttons
 
     switch (dockSettings.position) {
-      case 'NW': // Top-left
-        x = primaryDisplay.bounds.x + 10;
-        y = primaryDisplay.bounds.y + 10;
-        width = Math.min(600, windowCount * itemWidth);
-        height = dockSize;
-        break;
-      case 'NE': // Top-right
-        x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth) - 10;
-        y = primaryDisplay.bounds.y + 10;
-        width = Math.min(600, windowCount * itemWidth);
-        height = dockSize;
-        break;
-      case 'SW': // Bottom-left
-        x = primaryDisplay.bounds.x + 10;
-        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
-        width = Math.min(600, windowCount * itemWidth);
-        height = dockSize;
-        break;
-      case 'SE': // Bottom-right (default)
-      default:
-        x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth) - 10;
-        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
-        width = Math.min(600, windowCount * itemWidth);
-        height = dockSize;
-        break;
-      case 'N': // Top horizontal
-        x = primaryDisplay.bounds.x + (primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth)) / 2;
-        y = primaryDisplay.bounds.y + 10;
-        width = Math.min(600, windowCount * itemWidth);
-        height = dockSize;
-        break;
-      case 'S': // Bottom horizontal
-        x = primaryDisplay.bounds.x + (primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth)) / 2;
-        y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
-        width = Math.min(600, windowCount * itemWidth);
-        height = dockSize;
-        break;
+    case 'NW': // Top-left
+      x = primaryDisplay.bounds.x + 10;
+      y = primaryDisplay.bounds.y + 10;
+      width = Math.min(600, windowCount * itemWidth);
+      height = dockSize;
+      break;
+    case 'NE': // Top-right
+      x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth) - 10;
+      y = primaryDisplay.bounds.y + 10;
+      width = Math.min(600, windowCount * itemWidth);
+      height = dockSize;
+      break;
+    case 'SW': // Bottom-left
+      x = primaryDisplay.bounds.x + 10;
+      y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
+      width = Math.min(600, windowCount * itemWidth);
+      height = dockSize;
+      break;
+    case 'SE': // Bottom-right (default)
+    default:
+      x = primaryDisplay.bounds.x + primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth) - 10;
+      y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
+      width = Math.min(600, windowCount * itemWidth);
+      height = dockSize;
+      break;
+    case 'N': // Top horizontal
+      x = primaryDisplay.bounds.x + (primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth)) / 2;
+      y = primaryDisplay.bounds.y + 10;
+      width = Math.min(600, windowCount * itemWidth);
+      height = dockSize;
+      break;
+    case 'S': // Bottom horizontal
+      x = primaryDisplay.bounds.x + (primaryDisplay.bounds.width - Math.min(600, windowCount * itemWidth)) / 2;
+      y = primaryDisplay.bounds.y + primaryDisplay.bounds.height - dockSize - 10;
+      width = Math.min(600, windowCount * itemWidth);
+      height = dockSize;
+      break;
     }
 
     this.dockWindow = new BrowserWindow({
@@ -959,7 +959,7 @@ class Dorganize {
     const windowCount = this.dofusWindows.length;
     const enabledCount = this.dofusWindows.filter(w => w.enabled).length;
 
-    let tooltip = `Dorganize\n`;
+    let tooltip = 'Dorganize\n';
     if (windowCount === 0) {
       tooltip += lang.displayTray_element_0;
     } else if (windowCount === 1) {

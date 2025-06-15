@@ -311,7 +311,7 @@ try {
       console.warn(`WindowManagerWindows: Cannot generate stable ID - missing character (${character}) or class (${dofusClass})`);
       return null;
     }
-    
+
     const cleanCharacter = character.toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanClass = dofusClass.toLowerCase().replace(/[^a-z0-9]/g, '');
     return `${cleanCharacter}_${cleanClass}_${processId}`;
@@ -335,9 +335,9 @@ try {
       });
 
       const processedWindows = this.processRawWindows(rawWindows);
-      
+
       console.log(`WindowManagerWindows: Found ${processedWindows.length} Dofus windows`);
-      
+
       return processedWindows;
 
     } catch (error) {
@@ -377,7 +377,7 @@ try {
       console.log('WindowManagerWindows: Using PowerShell method...');
 
       // CORRECTION: Commande PowerShell optimisée pour détecter toutes les fenêtres Dofus
-      const command = `powershell.exe -Command "Get-Process | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne '' } | Where-Object { $_.MainWindowTitle -like '*Release*' -or $_.MainWindowTitle -like '*Dofus*' } | Where-Object { $_.MainWindowTitle -notlike '*Ankama Launcher*' -and $_.MainWindowTitle -notlike '*Organizer*' } | ForEach-Object { @{ Handle = [string]$_.MainWindowHandle.ToInt64(); Title = $_.MainWindowTitle; ProcessId = $_.Id; ClassName = 'Unknown'; IsActive = $false; Bounds = @{ X = 0; Y = 0; Width = 800; Height = 600 } } } | ConvertTo-Json -Depth 2"`;
+      const command = 'powershell.exe -Command "Get-Process | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne \'\' } | Where-Object { $_.MainWindowTitle -like \'*Release*\' -or $_.MainWindowTitle -like \'*Dofus*\' } | Where-Object { $_.MainWindowTitle -notlike \'*Ankama Launcher*\' -and $_.MainWindowTitle -notlike \'*Organizer*\' } | ForEach-Object { @{ Handle = [string]$_.MainWindowHandle.ToInt64(); Title = $_.MainWindowTitle; ProcessId = $_.Id; ClassName = \'Unknown\'; IsActive = $false; Bounds = @{ X = 0; Y = 0; Width = 800; Height = 600 } } } | ConvertTo-Json -Depth 2"';
 
       const { stdout, stderr } = await execAsync(command, { timeout: 10000 });
 
@@ -518,16 +518,16 @@ try {
 
     // Format: "Nom - Classe - Version - Release" ou "Nom du Personnage - Nom de la Classe - ..."
     const parts = title.split(' - ');
-    
+
     if (parts.length >= 2) {
       const character = parts[0].trim();
       const classRaw = parts[1].trim();
-      
+
       // Normalize class name
       const dofusClass = this.normalizeClassName(classRaw);
-      
+
       console.log(`WindowManagerWindows: Parsed - Character: "${character}", Class: "${classRaw}" -> "${dofusClass}"`);
-      
+
       // MODIFIÉ: Accepter la fenêtre si elle a une classe valide, même si le format n'est pas parfait
       if (character && dofusClass && dofusClass !== 'unknown') {
         return { character, dofusClass };
@@ -537,7 +537,7 @@ try {
     // Fallback: essayer de détecter dans le titre complet
     const normalizedTitle = title.toLowerCase();
     const knownClasses = ['steamer', 'ecaflip', 'eniripsa', 'iop', 'cra', 'sadida', 'sacrieur', 'pandawa', 'osamodas', 'enutrof', 'sram', 'xelor', 'feca', 'roublard', 'zobal', 'ouginak', 'huppermage', 'eliotrope', 'forgelance'];
-    
+
     for (const className of knownClasses) {
       if (normalizedTitle.includes(className)) {
         const character = parts[0]?.trim() || 'Unknown';
