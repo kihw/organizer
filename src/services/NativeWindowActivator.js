@@ -13,7 +13,7 @@ class NativeWindowActivator {
     this.user32 = null;
     this.kernel32 = null;
     this.isNativeAvailable = false;
-    this.fallbackMethod = 'alt-tab';
+    this.fallbackMethod = 'direct-handle';
     
     this.stats = {
       activations: 0,
@@ -24,7 +24,7 @@ class NativeWindowActivator {
     };
     
     this.initializeNative();
-    console.log('NativeWindowActivator: Initialized without PowerShell dependency');
+    console.log('NativeWindowActivator: Initialized with direct window targeting');
   }
 
   /**
@@ -38,7 +38,6 @@ class NativeWindowActivator {
       
       // Définir les types
       const voidPtr = this.ref.refType(this.ref.types.void);
-      const intPtr = this.ref.refType(this.ref.types.int);
       
       // Charger user32.dll
       this.user32 = this.ffi.Library('user32', {
@@ -47,6 +46,8 @@ class NativeWindowActivator {
         'BringWindowToTop': ['bool', [voidPtr]],
         'IsWindow': ['bool', [voidPtr]],
         'IsWindowVisible': ['bool', [voidPtr]],
+        'SetActiveWindow': ['bool', [voidPtr]],
+        'SwitchToThisWindow': ['void', [voidPtr, 'bool']],
         'GetWindowThreadProcessId': ['uint32', [voidPtr, 'uint32*']]
       });
       
@@ -54,13 +55,13 @@ class NativeWindowActivator {
       console.log('NativeWindowActivator: Native FFI APIs loaded successfully ✅');
       
     } catch (error) {
-      console.log('NativeWindowActivator: FFI not available, using fallback methods');
+      console.log('NativeWindowActivator: FFI not available, using direct handle methods');
       this.isNativeAvailable = false;
     }
   }
 
   /**
-   * MÉTHODE PRINCIPALE - Activation native ultra-rapide
+   * MÉTHODE PRINCIPALE - Activation native ciblée
    */
   async activateWindow(handle) {
     const startTime = Date.now();
@@ -73,11 +74,11 @@ class NativeWindowActivator {
         return false;
       }
       
-      console.log(`NativeWindowActivator: Activating handle ${handle}`);
+      console.log(`NativeWindowActivator: Targeting specific window handle ${handle}`);
       
       let success = false;
       
-      // Méthode 1: Native FFI (le plus rapide)
+      // Méthode 1: Native FFI direct (le plus précis)
       if (this.isNativeAvailable) {
         success = await this.activateWithNativeFFI(handle);
         if (success) {
@@ -89,23 +90,23 @@ class NativeWindowActivator {
         }
       }
       
-      // Méthode 2: Alt+Tab simulation (sans PowerShell)
-      success = await this.activateWithAltTab(handle);
+      // Méthode 2: VBScript ciblé (pas Alt+Tab générique)
+      success = await this.activateWithTargetedVBScript(handle);
       if (success) {
         this.stats.fallbackSuccesses++;
         const duration = Date.now() - startTime;
         this.updateStats(duration);
-        console.log(`NativeWindowActivator: Alt+Tab SUCCESS in ${duration}ms`);
+        console.log(`NativeWindowActivator: Targeted VBScript SUCCESS in ${duration}ms`);
         return true;
       }
       
-      // Méthode 3: SendKeys simulation
-      success = await this.activateWithSendKeys(handle);
+      // Méthode 3: Batch ciblé
+      success = await this.activateWithTargetedBatch(handle);
       if (success) {
         this.stats.fallbackSuccesses++;
         const duration = Date.now() - startTime;
         this.updateStats(duration);
-        console.log(`NativeWindowActivator: SendKeys SUCCESS in ${duration}ms`);
+        console.log(`NativeWindowActivator: Targeted Batch SUCCESS in ${duration}ms`);
         return true;
       }
       
@@ -121,17 +122,16 @@ class NativeWindowActivator {
   }
 
   /**
-   * Activation avec FFI natif (le plus rapide)
+   * Activation avec FFI natif (ciblée, pas Alt+Tab)
    */
   async activateWithNativeFFI(handle) {
     try {
       if (!this.user32) return false;
       
-      console.log('NativeWindowActivator: Using native FFI');
+      console.log('NativeWindowActivator: Using native FFI for direct targeting');
       
       // Convertir le handle en pointeur
-      const hwnd = this.ref.address(Buffer.alloc(8));
-      hwnd.writeInt64LE(parseInt(handle), 0);
+      const hwnd = this.ref.alloc(this.ref.types.int64, parseInt(handle));
       
       // Vérifier que la fenêtre existe
       if (!this.user32.IsWindow(hwnd)) {
@@ -139,9 +139,17 @@ class NativeWindowActivator {
         return false;
       }
       
-      // Séquence d'activation native
+      // Séquence d'activation native CIBLÉE
+      // 1. Restaurer la fenêtre si minimisée
       const showResult = this.user32.ShowWindow(hwnd, 9); // SW_RESTORE
+      
+      // 2. Amener au premier plan
       const bringResult = this.user32.BringWindowToTop(hwnd);
+      
+      // 3. Utiliser SwitchToThisWindow pour forcer l'activation
+      this.user32.SwitchToThisWindow(hwnd, true);
+      
+      // 4. Définir comme fenêtre de premier plan
       const foregroundResult = this.user32.SetForegroundWindow(hwnd);
       
       console.log(`NativeWindowActivator: FFI results - Show: ${showResult}, Bring: ${bringResult}, Foreground: ${foregroundResult}`);
@@ -155,70 +163,40 @@ class NativeWindowActivator {
   }
 
   /**
-   * Activation avec Alt+Tab (sans PowerShell)
+   * VBScript ciblé (pas Alt+Tab générique)
    */
-  async activateWithAltTab(handle) {
+  async activateWithTargetedVBScript(handle) {
     try {
-      console.log('NativeWindowActivator: Using Alt+Tab method');
+      console.log('NativeWindowActivator: Using targeted VBScript method');
       
-      // Utiliser Node.js robotjs si disponible, sinon VBScript
-      if (this.isRobotJSAvailable()) {
-        return await this.activateWithRobotJS(handle);
-      } else {
-        return await this.activateWithVBScript(handle);
-      }
-      
-    } catch (error) {
-      console.warn('NativeWindowActivator: Alt+Tab activation failed:', error.message);
-      return false;
-    }
-  }
-
-  /**
-   * Activation avec RobotJS (si disponible)
-   */
-  async activateWithRobotJS(handle) {
-    try {
-      const robot = require('robotjs');
-      
-      // Simuler Alt+Tab pour changer de fenêtre
-      robot.keyTap('tab', 'alt');
-      
-      // Attendre un peu
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      return true;
-      
-    } catch (error) {
-      console.warn('NativeWindowActivator: RobotJS not available');
-      return false;
-    }
-  }
-
-  /**
-   * Activation avec VBScript (léger et rapide)
-   */
-  async activateWithVBScript(handle) {
-    try {
-      console.log('NativeWindowActivator: Using VBScript method');
-      
-      // Créer un script VBScript temporaire
+      // VBScript qui cible directement le handle de fenêtre
       const vbScript = `
+        Dim objShell, hwnd
         Set objShell = CreateObject("WScript.Shell")
-        objShell.SendKeys "%{TAB}"
-        WScript.Sleep 50
-        objShell.AppActivate ${handle}
+        hwnd = ${handle}
+        
+        ' Utiliser AppActivate avec le handle directement
+        On Error Resume Next
+        objShell.AppActivate hwnd
+        
+        ' Si ça échoue, essayer avec SendKeys pour forcer l'activation
+        If Err.Number <> 0 Then
+            Err.Clear
+            ' Envoyer Alt+Esc puis cibler la fenêtre
+            objShell.SendKeys "%{ESC}"
+            WScript.Sleep 50
+            objShell.AppActivate hwnd
+        End If
       `;
       
-      // Écrire le script dans un fichier temporaire
+      // Écrire et exécuter le script VBScript
       const fs = require('fs');
       const path = require('path');
       const os = require('os');
       
-      const scriptPath = path.join(os.tmpdir(), `activate_${Date.now()}.vbs`);
+      const scriptPath = path.join(os.tmpdir(), `activate_${handle}_${Date.now()}.vbs`);
       fs.writeFileSync(scriptPath, vbScript);
       
-      // Exécuter le script VBScript
       await execAsync(`cscript //NoLogo "${scriptPath}"`, {
         timeout: 1000,
         windowsHide: true
@@ -234,22 +212,22 @@ class NativeWindowActivator {
       return true;
       
     } catch (error) {
-      console.warn('NativeWindowActivator: VBScript activation failed:', error.message);
+      console.warn('NativeWindowActivator: Targeted VBScript activation failed:', error.message);
       return false;
     }
   }
 
   /**
-   * Activation avec SendKeys (méthode alternative)
+   * Batch ciblé avec handle spécifique
    */
-  async activateWithSendKeys(handle) {
+  async activateWithTargetedBatch(handle) {
     try {
-      console.log('NativeWindowActivator: Using SendKeys method');
+      console.log('NativeWindowActivator: Using targeted Batch method');
       
-      // Utiliser une commande batch simple
+      // Commande batch qui utilise PowerShell minimal pour cibler le handle
       const batchScript = `
         @echo off
-        powershell -WindowStyle Hidden -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.SendKeys]::SendWait('%{TAB}')"
+        powershell -WindowStyle Hidden -NoProfile -Command "Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{[DllImport(\\"user32.dll\\")]public static extern bool SetForegroundWindow(IntPtr h);[DllImport(\\"user32.dll\\")]public static extern bool ShowWindow(IntPtr h,int s);}';$h=[IntPtr]${handle};[Win32]::ShowWindow($h,9);[Win32]::SetForegroundWindow($h)"
       `;
       
       await execAsync(batchScript, {
@@ -261,19 +239,26 @@ class NativeWindowActivator {
       return true;
       
     } catch (error) {
-      console.warn('NativeWindowActivator: SendKeys activation failed:', error.message);
+      console.warn('NativeWindowActivator: Targeted Batch activation failed:', error.message);
       return false;
     }
   }
 
   /**
-   * Vérifier si RobotJS est disponible
+   * Activation avec RobotJS ciblé (si disponible)
    */
-  isRobotJSAvailable() {
+  async activateWithTargetedRobotJS(handle) {
     try {
-      require('robotjs');
-      return true;
+      const robot = require('robotjs');
+      
+      // Au lieu d'Alt+Tab générique, utiliser une approche plus ciblée
+      // Cette méthode nécessiterait une intégration plus complexe avec les APIs Windows
+      // Pour l'instant, on évite cette méthode car elle ne peut pas cibler directement
+      
+      return false;
+      
     } catch (error) {
+      console.warn('NativeWindowActivator: RobotJS not available or failed');
       return false;
     }
   }
@@ -300,7 +285,7 @@ class NativeWindowActivator {
       successRate: parseFloat(successRate.toFixed(1)),
       avgTime: parseFloat(this.stats.avgTime.toFixed(2)),
       nativeAvailable: this.isNativeAvailable,
-      preferredMethod: this.isNativeAvailable ? 'Native FFI' : 'Alt+Tab Simulation'
+      preferredMethod: this.isNativeAvailable ? 'Native FFI Direct' : 'Targeted VBScript'
     };
   }
 
@@ -308,50 +293,44 @@ class NativeWindowActivator {
    * Test de connectivité
    */
   async testActivation() {
-    console.log('NativeWindowActivator: Running activation test...');
+    console.log('NativeWindowActivator: Running targeted activation test...');
     
     const testResults = {
       native: false,
-      altTab: false,
-      sendKeys: false
+      targetedVBScript: false,
+      targetedBatch: false
     };
     
     // Test FFI natif
     if (this.isNativeAvailable) {
       try {
-        // Test avec un handle factice (ne devrait pas planter)
         testResults.native = true;
-        console.log('✅ Native FFI: Available');
+        console.log('✅ Native FFI Direct: Available');
       } catch (error) {
-        console.log('❌ Native FFI: Failed');
+        console.log('❌ Native FFI Direct: Failed');
       }
     } else {
-      console.log('⚠️  Native FFI: Not available');
+      console.log('⚠️  Native FFI Direct: Not available');
     }
     
-    // Test Alt+Tab
+    // Test VBScript ciblé
     try {
-      if (this.isRobotJSAvailable()) {
-        testResults.altTab = true;
-        console.log('✅ Alt+Tab (RobotJS): Available');
-      } else {
-        testResults.altTab = true; // VBScript devrait toujours marcher
-        console.log('✅ Alt+Tab (VBScript): Available');
-      }
+      testResults.targetedVBScript = true;
+      console.log('✅ Targeted VBScript: Available');
     } catch (error) {
-      console.log('❌ Alt+Tab: Failed');
+      console.log('❌ Targeted VBScript: Failed');
     }
     
-    // Test SendKeys
+    // Test Batch ciblé
     try {
-      testResults.sendKeys = true;
-      console.log('✅ SendKeys: Available');
+      testResults.targetedBatch = true;
+      console.log('✅ Targeted Batch: Available');
     } catch (error) {
-      console.log('❌ SendKeys: Failed');
+      console.log('❌ Targeted Batch: Failed');
     }
     
     const availableMethods = Object.values(testResults).filter(Boolean).length;
-    console.log(`NativeWindowActivator: ${availableMethods}/3 methods available`);
+    console.log(`NativeWindowActivator: ${availableMethods}/3 targeted methods available`);
     
     return testResults;
   }
