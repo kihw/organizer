@@ -94,7 +94,7 @@ def list_dofus_windows():
     
     try:
         all_windows = gw.getAllWindows()
-        
+
         # Mots-clés pour identifier les fenêtres Dofus
         dofus_keywords = [
             'feca', 'osamodas', 'enutrof', 'sram', 'xelor', 'ecaflip',
@@ -102,20 +102,20 @@ def list_dofus_windows():
             'roublard', 'zobal', 'steamer', 'eliotrope', 'huppermage',
             'ouginak', 'forgelance', 'dofus'
         ]
-        
+
         dofus_windows = []
-        
+
         for window in all_windows:
             if window.title and len(window.title.strip()) > 0:
                 title_lower = window.title.lower()
-                
+
                 # Exclure notre propre organizer
                 if 'organizer' in title_lower:
                     continue
-                
+
                 # Vérifier si c'est une fenêtre Dofus
                 is_dofus = any(keyword in title_lower for keyword in dofus_keywords)
-                
+
                 if is_dofus:
                     try:
                         hwnd = window._hWnd
@@ -128,6 +128,42 @@ def list_dofus_windows():
                             })
                     except:
                         continue
+
+        # Fallback : aucune fenêtre détectée ? On passe par la liste des processus
+        if not dofus_windows:
+            try:
+                import psutil
+                import win32process
+
+                def enum_windows_for_pid(pid):
+                    windows = []
+
+                    def cb(hwnd, extra):
+                        _, window_pid = win32process.GetWindowThreadProcessId(hwnd)
+                        if window_pid == pid and win32gui.IsWindow(hwnd):
+                            title = win32gui.GetWindowText(hwnd)
+                            if title:
+                                windows.append({
+                                    "title": title,
+                                    "hwnd": hwnd,
+                                    "visible": win32gui.IsWindowVisible(hwnd),
+                                    "minimized": win32gui.IsIconic(hwnd)
+                                })
+                        return True
+
+                    win32gui.EnumWindows(cb, None)
+                    return windows
+
+                dofus_procs = [p for p in psutil.process_iter(['pid', 'name']) if 'dofus' in (p.info['name'] or '').lower()]
+
+                for proc in dofus_procs:
+                    windows = enum_windows_for_pid(proc.info['pid'])
+                    for win in windows:
+                        title_lower = win['title'].lower()
+                        if any(k in title_lower for k in dofus_keywords):
+                            dofus_windows.append(win)
+            except Exception:
+                pass
         
         duration = (time.time() - start_time) * 1000
         

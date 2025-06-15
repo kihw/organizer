@@ -40,9 +40,16 @@ class DofusOrganizerPython {
     console.log('DofusOrganizerPython: Initializing...');
 
     app.whenReady().then(() => {
-      this.loadSettings();
-      this.migrateOldSettings();
-      this.startWindowDetection();
+      // Always show the configuration window even if settings fail to load
+      this.createConfigWindow();
+
+      try {
+        this.loadSettings();
+        this.migrateOldSettings();
+      } catch (error) {
+        console.error('DofusOrganizerPython: Initialization error:', error);
+      }
+
       this.setupIPC();
     });
 
@@ -65,12 +72,15 @@ class DofusOrganizerPython {
   }
 
   detectDofusWindows() {
-    // Implement window detection logic here
-    // This is a placeholder - implement your actual window detection
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      console.log(`DofusOrganizerPython: Sending current ${this.dofusWindows.length} windows to config`);
-      this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
-    }
+    this.windowManager.getDofusWindows().then(windows => {
+      this.dofusWindows = windows;
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        console.log(`DofusOrganizerPython: Sending current ${windows.length} windows to config`);
+        this.mainWindow.webContents.send('windows-updated', windows);
+      }
+    }).catch(error => {
+      console.error('DofusOrganizerPython: Error detecting windows:', error);
+    });
   }
 
   setupIPC() {
@@ -81,6 +91,31 @@ class DofusOrganizerPython {
 
     ipcMain.on('toggle-shortcuts', () => {
       this.toggleShortcuts();
+    });
+
+    ipcMain.handle('get-dofus-windows', async () => {
+      const windows = await this.windowManager.getDofusWindows();
+      this.dofusWindows = windows;
+      return windows;
+    });
+
+    ipcMain.handle('refresh-windows', async () => {
+      const windows = await this.windowManager.getDofusWindows();
+      this.dofusWindows = windows;
+      this.detectDofusWindows();
+      return windows;
+    });
+
+    ipcMain.handle('get-language', () => {
+      return this.languageManager.getCurrentLanguage();
+    });
+
+    ipcMain.handle('get-settings', () => {
+      return this.notificationManager.getSettings();
+    });
+
+    ipcMain.handle('get-dofus-classes', () => {
+      return this.windowManager.getDofusClasses();
     });
   }
 
@@ -144,6 +179,10 @@ class DofusOrganizerPython {
 
     this.isConfiguring = true;
     this.deactivateShortcuts();
+
+    // Start window detection when the config window is created
+    this.detectDofusWindows();
+    this.startWindowDetection();
   }
 
   showDockWindow() {

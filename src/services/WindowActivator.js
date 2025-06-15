@@ -24,8 +24,8 @@ class WindowActivator {
       fastActivations: 0 // <50ms
     };
 
+    this.pythonVerified = false;
     console.log('WindowActivator: Initialized with Python script activation');
-    this.verifyPythonScript();
   }
 
   /**
@@ -71,6 +71,12 @@ class WindowActivator {
     const startTime = Date.now();
 
     try {
+      if (!(await this.ensurePythonVerified())) {
+        console.error('WindowActivator: Python not available');
+        this.updateStats(startTime, false);
+        return false;
+      }
+
       this.stats.activations++;
 
       // Extraire le nom du personnage du windowId
@@ -116,6 +122,15 @@ class WindowActivator {
     }
   }
 
+  async ensurePythonVerified() {
+    if (this.pythonVerified) {
+      return true;
+    }
+
+    this.pythonVerified = await this.verifyPythonScript();
+    return this.pythonVerified;
+  }
+
   /**
    * Extrait le nom du personnage depuis l'ID de fenêtre
    * Format attendu: "charactername_class_pid" ou similaire
@@ -151,6 +166,11 @@ class WindowActivator {
     const startTime = Date.now();
 
     try {
+      if (!(await this.ensurePythonVerified())) {
+        console.error('WindowActivator: Python not available');
+        return [];
+      }
+
       console.log('WindowActivator: Detecting Dofus windows with Python...');
 
       const command = `${this.pythonCommand} "${this.pythonScriptPath}" list`;
