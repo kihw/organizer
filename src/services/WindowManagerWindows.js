@@ -1,9 +1,9 @@
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 
-// Import du DummyWindowActivator au lieu de la logique native
-const { DummyWindowActivator } = require('./DummyWindowActivator');
+// Import du WindowActivator au lieu de la logique native
+const { WindowActivator } = require('./WindowActivator');
 
 class WindowManagerWindows {
   constructor() {
@@ -13,8 +13,8 @@ class WindowManagerWindows {
     this.psScriptReady = false;
     this.windowIdMapping = new Map(); // Map stable IDs to current window handles
 
-    // AJOUTÉ: Utiliser DummyWindowActivator au lieu de la logique d'activation native
-    this.windowActivator = new DummyWindowActivator();
+    // AJOUTÉ: Utiliser WindowActivator au lieu de la logique d'activation native
+    this.windowActivator = new WindowActivator();
 
     // Define available classes and their corresponding avatars
     this.dofusClasses = {
@@ -276,7 +276,7 @@ try {
   async testPowerShellScript() {
     try {
       const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" get-windows`;
-      const { stdout, stderr } = await execAsync(command, { timeout: 5000 });
+      const { stderr } = await execAsync(command, { timeout: 5000 });
 
       if (stderr && stderr.trim()) {
         console.warn('WindowManagerWindows: PowerShell test stderr:', stderr);
@@ -617,7 +617,7 @@ try {
         return false;
       }
 
-      // MODIFIÉ: Utiliser DummyWindowActivator au lieu de la logique PowerShell
+      // MODIFIÉ: Utiliser WindowActivator au lieu de la logique PowerShell
       const result = await this.windowActivator.activateWindow(windowId);
 
       if (result) {
@@ -652,7 +652,7 @@ try {
         return false;
       }
 
-      // MODIFIÉ: Utiliser DummyWindowActivator au lieu de la logique PowerShell
+      // MODIFIÉ: Utiliser WindowActivator au lieu de la logique PowerShell
       console.log(`WindowManagerWindows: Move window ${windowId} to ${x},${y} (${width}x${height}) - using dummy activator`);
       return this.windowActivator.bringWindowToFront(windowId);
     } catch (error) {
@@ -671,7 +671,7 @@ try {
     try {
       console.log(`WindowManagerWindows: Organizing ${enabledWindows.length} windows in ${layout} layout (using dummy activator)`);
 
-      // MODIFIÉ: Utiliser DummyWindowActivator au lieu de la logique de repositionnement
+      // MODIFIÉ: Utiliser WindowActivator au lieu de la logique de repositionnement
       this.windowActivator.bringWindowToFront('organize-windows-request');
 
       // Simuler l'organisation pour chaque fenêtre
@@ -688,19 +688,19 @@ try {
     }
   }
 
-  async arrangeInGrid(windows, startX, startY, totalWidth, totalHeight) {
+  async arrangeInGrid(_windows, _startX, _startY, _totalWidth, _totalHeight) {
     console.log('WindowManagerWindows: arrangeInGrid called (dummy implementation)');
     // SUPPRIMÉ: Toute logique de repositionnement réel
     return this.windowActivator.bringWindowToFront('arrange-grid');
   }
 
-  async arrangeHorizontally(windows, startX, startY, totalWidth, totalHeight) {
+  async arrangeHorizontally(_windows, _startX, _startY, _totalWidth, _totalHeight) {
     console.log('WindowManagerWindows: arrangeHorizontally called (dummy implementation)');
     // SUPPRIMÉ: Toute logique de repositionnement réel
     return this.windowActivator.bringWindowToFront('arrange-horizontal');
   }
 
-  async arrangeVertically(windows, startX, startY, totalWidth, totalHeight) {
+  async arrangeVertically(_windows, _startX, _startY, _totalWidth, _totalHeight) {
     console.log('WindowManagerWindows: arrangeVertically called (dummy implementation)');
     // SUPPRIMÉ: Toute logique de repositionnement réel
     return this.windowActivator.bringWindowToFront('arrange-vertical');
@@ -778,7 +778,7 @@ try {
       }
     }
 
-    // Clean up DummyWindowActivator
+    // Clean up WindowActivator
     if (this.windowActivator && typeof this.windowActivator.cleanup === 'function') {
       this.windowActivator.cleanup();
     }

@@ -1,11 +1,11 @@
 /**
- * DummyWindowActivator - Fonction factice pour remplacer la logique de mise au premier plan
+ * WindowActivator - Fonction factice pour remplacer la logique de mise au premier plan
  * Cette fonction sert de placeholder uniforme pour tous les appels de mise au premier plan
  */
 
-class DummyWindowActivator {
+class WindowActivator {
     constructor() {
-        console.log('DummyWindowActivator: Initialized (no window activation logic)');
+        console.log('WindowActivator: Initialized (no window activation logic)');
     }
 
     /**
@@ -15,7 +15,7 @@ class DummyWindowActivator {
      */
     bringWindowToFront(windowId = null) {
         // Fonction volontairement vide (placeholder)
-        console.log(`DummyWindowActivator: bringWindowToFront called${windowId ? ` for ${windowId}` : ''} - no action taken`);
+        console.log(`WindowActivator: bringWindowToFront called${windowId ? ` for ${windowId}` : ''} - no action taken`);
         return true;
     }
 
@@ -26,7 +26,7 @@ class DummyWindowActivator {
      */
     async activateWindow(windowId) {
         // Fonction volontairement vide (placeholder)
-        console.log(`DummyWindowActivator: activateWindow called for ${windowId} - no action taken`);
+        console.log(`WindowActivator: activateWindow called for ${windowId} - no action taken`);
         return true;
     }
 
@@ -37,7 +37,7 @@ class DummyWindowActivator {
      */
     focusWindow(windowId = null) {
         // Fonction volontairement vide (placeholder)
-        console.log(`DummyWindowActivator: focusWindow called${windowId ? ` for ${windowId}` : ''} - no action taken`);
+        console.log(`WindowActivator: focusWindow called${windowId ? ` for ${windowId}` : ''} - no action taken`);
         return true;
     }
 
@@ -61,32 +61,31 @@ class DummyWindowActivator {
      * Fonction factice de nettoyage
      */
     cleanup() {
-        console.log('DummyWindowActivator: Cleanup completed (no resources to clean)');
+        console.log('WindowActivator: Cleanup completed (no resources to clean)');
     }
 }
 
 // Export des fonctions pour compatibilité
 function bringWindowToFront(windowId = null) {
     // Fonction volontairement vide (placeholder)
-    console.log(`DummyWindowActivator: Global bringWindowToFront called${windowId ? ` for ${windowId}` : ''} - no action taken`);
+    console.log(`WindowActivator: Global bringWindowToFront called${windowId ? ` for ${windowId}` : ''} - no action taken`);
     return true;
 }
 
 function activateWindow(windowId) {
     // Fonction volontairement vide (placeholder)
-    console.log(`DummyWindowActivator: Global activateWindow called for ${windowId} - no action taken`);
+    console.log(`WindowActivator: Global activateWindow called for ${windowId} - no action taken`);
     return Promise.resolve(true);
 }
 
 function focusWindow(windowId = null) {
     // Fonction volontairement vide (placeholder)
-    console.log(`DummyWindowActivator: Global focusWindow called${windowId ? ` for ${windowId}` : ''} - no action taken`);
+    console.log(`WindowActivator: Global focusWindow called${windowId ? ` for ${windowId}` : ''} - no action taken`);
     return true;
 }
 
-module.exports = {
-    DummyWindowActivator,
-    bringWindowToFront,
-    activateWindow,
-    focusWindow
-};
+module.exports = WindowActivator;
+module.exports.WindowActivator = WindowActivator;
+module.exports.bringWindowToFront = bringWindowToFront;
+module.exports.activateWindow = activateWindow;
+module.exports.focusWindow = focusWindow;
