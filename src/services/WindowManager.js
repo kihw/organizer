@@ -1,4 +1,4 @@
-const PythonWindowActivator = require('./PythonWindowActivator');
+const WindowActivator = require('./WindowActivator');
 const eventBus = require('../core/EventBus');
 const performanceMonitor = require('../core/PerformanceMonitor');
 
@@ -8,10 +8,10 @@ const performanceMonitor = require('../core/PerformanceMonitor');
  */
 class PythonWindowManager {
   constructor() {
-    this.pythonActivator = new PythonWindowActivator();
+    this.pythonActivator = new WindowActivator();
     this.lastDetectedWindows = [];
     this.isScanning = false;
-    
+
     // Classes Dofus avec avatars
     this.dofusClasses = {
       'feca': { name: 'Feca', avatar: '1' },
@@ -34,7 +34,7 @@ class PythonWindowManager {
       'ouginak': { name: 'Ouginak', avatar: '18' },
       'forgelance': { name: 'Forgelance', avatar: '20' }
     };
-    
+
     console.log('PythonWindowManager: Initialized with Python-only activation');
   }
 
@@ -45,26 +45,26 @@ class PythonWindowManager {
   async activateWindow(windowId) {
     return performanceMonitor.measureAsync('python_window_activation', async () => {
       const startTime = Date.now();
-      
+
       try {
         console.log(`PythonWindowManager: Activating ${windowId} with Python`);
-        
+
         // Activation directe via Python
         const success = await this.pythonActivator.activateWindow(windowId);
-        
+
         const duration = Date.now() - startTime;
-        
+
         if (success) {
           // Mettre à jour l'état actif
           this.updateActiveState(windowId);
-          
+
           // Émettre l'événement
-          eventBus.emit('window:activated', { 
-            windowId, 
+          eventBus.emit('window:activated', {
+            windowId,
             duration,
             method: 'python'
           });
-          
+
           console.log(`PythonWindowManager: SUCCESS for ${windowId} in ${duration}ms`);
           return true;
         } else {
@@ -72,7 +72,7 @@ class PythonWindowManager {
           eventBus.emit('window:activation_failed', { windowId });
           return false;
         }
-        
+
       } catch (error) {
         console.error(`PythonWindowManager: Error activating ${windowId}:`, error.message);
         return false;
@@ -85,23 +85,23 @@ class PythonWindowManager {
    */
   async getDofusWindows() {
     const startTime = Date.now();
-    
+
     try {
       if (this.isScanning) {
         console.log('PythonWindowManager: Scan in progress, returning cached');
         return this.lastDetectedWindows;
       }
-      
+
       this.isScanning = true;
       console.log('PythonWindowManager: Starting Python detection...');
-      
+
       // Détection via Python
       const windows = await this.pythonActivator.getDofusWindows();
-      
+
       if (windows && windows.length >= 0) {
         // Enrichir les fenêtres avec les données stockées
         const enrichedWindows = this.enrichWindowsWithStoredData(windows);
-        
+
         // Trier par initiative
         enrichedWindows.sort((a, b) => {
           if (b.initiative !== a.initiative) {
@@ -109,15 +109,15 @@ class PythonWindowManager {
           }
           return a.character.localeCompare(b.character);
         });
-        
+
         this.lastDetectedWindows = enrichedWindows;
-        
+
         const duration = Date.now() - startTime;
         console.log(`PythonWindowManager: Detected ${enrichedWindows.length} windows in ${duration}ms`);
       }
-      
+
       return this.lastDetectedWindows;
-      
+
     } catch (error) {
       console.error('PythonWindowManager: Detection failed:', error.message);
       return this.lastDetectedWindows;
@@ -224,14 +224,14 @@ class PythonWindowManager {
       const classes = store.get('classes', {});
       classes[windowId] = classKey;
       store.set('classes', classes);
-      
+
       // Mettre à jour dans la liste actuelle
       const window = this.lastDetectedWindows.find(w => w.id === windowId);
       if (window) {
         window.dofusClass = classKey;
         window.avatar = this.getClassAvatar(classKey);
       }
-      
+
       return true;
     } catch (error) {
       console.error('PythonWindowManager: Error setting window class:', error);
@@ -274,7 +274,7 @@ class PythonWindowManager {
    */
   getStats() {
     const pythonStats = this.pythonActivator.getStats();
-    
+
     return {
       ...pythonStats,
       lastDetectedCount: this.lastDetectedWindows.length,
@@ -290,25 +290,25 @@ class PythonWindowManager {
     try {
       const pythonTest = await this.testPythonConnection();
       const stats = this.getStats();
-      
+
       let status = 'healthy';
       const issues = [];
-      
+
       if (!pythonTest.success) {
         status = 'critical';
         issues.push('Python script connection failed');
       }
-      
+
       if (stats.avgTime > 100) {
         status = status === 'critical' ? 'critical' : 'degraded';
         issues.push(`Slow activation time: ${stats.avgTime}ms`);
       }
-      
+
       if (stats.successRate < 95) {
         status = status === 'critical' ? 'critical' : 'degraded';
         issues.push(`Low success rate: ${stats.successRate}%`);
       }
-      
+
       return {
         status,
         pythonAvailable: pythonTest.success,
@@ -317,7 +317,7 @@ class PythonWindowManager {
         recommendations: this.generateRecommendations(issues),
         lastDetectedWindows: this.lastDetectedWindows.length
       };
-      
+
     } catch (error) {
       return {
         status: 'critical',
@@ -335,26 +335,26 @@ class PythonWindowManager {
    */
   generateRecommendations(issues) {
     const recommendations = [];
-    
+
     if (issues.some(issue => issue.includes('Python script'))) {
       recommendations.push('Install Python 3.x and required packages: pip install pygetwindow pywin32');
       recommendations.push('Verify script permissions and path');
     }
-    
+
     if (issues.some(issue => issue.includes('Slow activation'))) {
       recommendations.push('Check system resources and close unnecessary applications');
       recommendations.push('Verify Python installation is optimized');
     }
-    
+
     if (issues.some(issue => issue.includes('Low success rate'))) {
       recommendations.push('Ensure Dofus windows have proper titles');
       recommendations.push('Check for window title format changes');
     }
-    
+
     if (recommendations.length === 0) {
       recommendations.push('System running optimally');
     }
-    
+
     return recommendations;
   }
 
@@ -364,7 +364,7 @@ class PythonWindowManager {
   async validatePythonEnvironment() {
     try {
       console.log('PythonWindowManager: Validating Python environment...');
-      
+
       // Test de base
       const basicTest = await this.pythonActivator.verifyPythonScript();
       if (!basicTest) {
@@ -374,15 +374,15 @@ class PythonWindowManager {
           details: 'Python not available or script missing'
         };
       }
-      
+
       // Test de détection
       const detectionTest = await this.pythonActivator.getDofusWindows();
-      
+
       // Test de connexion
       const connectionTest = await this.testPythonConnection();
-      
+
       const valid = basicTest && connectionTest.success;
-      
+
       return {
         valid,
         pythonAvailable: basicTest,
@@ -390,7 +390,7 @@ class PythonWindowManager {
         connectionTest: connectionTest,
         windowsDetected: detectionTest ? detectionTest.length : 0
       };
-      
+
     } catch (error) {
       return {
         valid: false,
@@ -407,12 +407,12 @@ class PythonWindowManager {
     try {
       this.lastDetectedWindows = [];
       this.pythonActivator.cleanup();
-      
+
       console.log('PythonWindowManager: Cleanup completed');
-      
+
       const finalStats = this.getStats();
       console.log('PythonWindowManager: Final Python stats:', finalStats);
-      
+
       eventBus.emit('windows:cleanup_python', finalStats);
     } catch (error) {
       console.error('PythonWindowManager: Cleanup error:', error);

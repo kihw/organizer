@@ -6,14 +6,14 @@ const fs = require('fs');
 const execAsync = promisify(exec);
 
 /**
- * PythonWindowActivator - Gestionnaire d'activation utilisant le script Python
+ * WindowActivator - Gestionnaire d'activation utilisant le script Python
  * Remplace complètement toutes les méthodes PowerShell par du Python natif
  */
-class PythonWindowActivator {
+class WindowActivator {
   constructor() {
     this.pythonScriptPath = path.join(__dirname, '../../scripts/window_activator.py');
     this.pythonCommand = 'python'; // ou 'python3' selon l'installation
-    
+
     // Statistiques de performance
     this.stats = {
       activations: 0,
@@ -23,8 +23,8 @@ class PythonWindowActivator {
       avgTime: 0,
       fastActivations: 0 // <50ms
     };
-    
-    console.log('PythonWindowActivator: Initialized with Python script activation');
+
+    console.log('WindowActivator: Initialized with Python script activation');
     this.verifyPythonScript();
   }
 
@@ -35,7 +35,7 @@ class PythonWindowActivator {
     try {
       // Vérifier que le script existe
       if (!fs.existsSync(this.pythonScriptPath)) {
-        console.error(`PythonWindowActivator: Script not found at ${this.pythonScriptPath}`);
+        console.error(`WindowActivator: Script not found at ${this.pythonScriptPath}`);
         return false;
       }
 
@@ -44,20 +44,20 @@ class PythonWindowActivator {
         timeout: 2000
       });
 
-      console.log(`PythonWindowActivator: Python available - ${stdout.trim()}`);
+      console.log(`WindowActivator: Python available - ${stdout.trim()}`);
       return true;
 
     } catch (error) {
-      console.warn('PythonWindowActivator: Python verification failed:', error.message);
-      
+      console.warn('WindowActivator: Python verification failed:', error.message);
+
       // Essayer python3 si python échoue
       try {
         this.pythonCommand = 'python3';
         const { stdout } = await execAsync('python3 --version', { timeout: 2000 });
-        console.log(`PythonWindowActivator: Python3 available - ${stdout.trim()}`);
+        console.log(`WindowActivator: Python3 available - ${stdout.trim()}`);
         return true;
       } catch (python3Error) {
-        console.error('PythonWindowActivator: Neither python nor python3 available');
+        console.error('WindowActivator: Neither python nor python3 available');
         return false;
       }
     }
@@ -69,24 +69,24 @@ class PythonWindowActivator {
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
-    
+
     try {
       this.stats.activations++;
-      
+
       // Extraire le nom du personnage du windowId
       const characterName = this.extractCharacterName(windowId);
-      
+
       if (!characterName) {
-        console.error(`PythonWindowActivator: Cannot extract character name from ${windowId}`);
+        console.error(`WindowActivator: Cannot extract character name from ${windowId}`);
         this.updateStats(startTime, false);
         return false;
       }
 
-      console.log(`PythonWindowActivator: Activating window for character "${characterName}"`);
+      console.log(`WindowActivator: Activating window for character "${characterName}"`);
 
       // Exécuter le script Python
       const command = `${this.pythonCommand} "${this.pythonScriptPath}" activate "${characterName}"`;
-      
+
       const { stdout, stderr } = await execAsync(command, {
         timeout: 3000, // 3s max
         encoding: 'utf8'
@@ -94,24 +94,24 @@ class PythonWindowActivator {
 
       // Parser la réponse JSON du script Python
       const result = JSON.parse(stdout.trim());
-      
+
       const duration = Date.now() - startTime;
 
       if (result.success) {
         this.updateStats(startTime, true);
-        console.log(`PythonWindowActivator: SUCCESS for "${characterName}" in ${duration}ms (Python: ${result.duration.toFixed(2)}ms)`);
-        console.log(`PythonWindowActivator: Activated window: "${result.window_title}"`);
+        console.log(`WindowActivator: SUCCESS for "${characterName}" in ${duration}ms (Python: ${result.duration.toFixed(2)}ms)`);
+        console.log(`WindowActivator: Activated window: "${result.window_title}"`);
         return true;
       } else {
         this.updateStats(startTime, false);
-        console.warn(`PythonWindowActivator: FAILED for "${characterName}": ${result.error}`);
+        console.warn(`WindowActivator: FAILED for "${characterName}": ${result.error}`);
         return false;
       }
 
     } catch (error) {
       const duration = Date.now() - startTime;
       this.updateStats(startTime, false);
-      console.error(`PythonWindowActivator: Error activating ${windowId}:`, error.message);
+      console.error(`WindowActivator: Error activating ${windowId}:`, error.message);
       return false;
     }
   }
@@ -139,7 +139,7 @@ class PythonWindowActivator {
 
       return null;
     } catch (error) {
-      console.warn('PythonWindowActivator: Error extracting character name:', error.message);
+      console.warn('WindowActivator: Error extracting character name:', error.message);
       return null;
     }
   }
@@ -149,33 +149,33 @@ class PythonWindowActivator {
    */
   async getDofusWindows() {
     const startTime = Date.now();
-    
+
     try {
-      console.log('PythonWindowActivator: Detecting Dofus windows with Python...');
+      console.log('WindowActivator: Detecting Dofus windows with Python...');
 
       const command = `${this.pythonCommand} "${this.pythonScriptPath}" list`;
-      
+
       const { stdout, stderr } = await execAsync(command, {
         timeout: 5000, // 5s max
         encoding: 'utf8'
       });
 
       const result = JSON.parse(stdout.trim());
-      
+
       if (result.success) {
         const duration = Date.now() - startTime;
-        console.log(`PythonWindowActivator: Detected ${result.count} Dofus windows in ${duration}ms`);
-        
+        console.log(`WindowActivator: Detected ${result.count} Dofus windows in ${duration}ms`);
+
         // Convertir les fenêtres Python en format Node.js
         const processedWindows = this.convertPythonWindows(result.windows);
         return processedWindows;
       } else {
-        console.error('PythonWindowActivator: Window detection failed:', result.error);
+        console.error('WindowActivator: Window detection failed:', result.error);
         return [];
       }
 
     } catch (error) {
-      console.error('PythonWindowActivator: Error detecting windows:', error.message);
+      console.error('WindowActivator: Error detecting windows:', error.message);
       return [];
     }
   }
@@ -208,9 +208,9 @@ class PythonWindowActivator {
         };
 
         processedWindows.push(windowInfo);
-        
+
       } catch (error) {
-        console.warn('PythonWindowActivator: Error processing window:', error.message);
+        console.warn('WindowActivator: Error processing window:', error.message);
       }
     }
 
@@ -231,7 +231,7 @@ class PythonWindowActivator {
       const character = match[1].trim();
       const className = match[2].trim().toLowerCase();
       const normalizedClass = this.normalizeClassName(className);
-      
+
       return { character, dofusClass: normalizedClass };
     }
 
@@ -286,7 +286,7 @@ class PythonWindowActivator {
    */
   updateStats(startTime, success) {
     const duration = Date.now() - startTime;
-    
+
     this.stats.totalTime += duration;
     this.stats.avgTime = this.stats.totalTime / this.stats.activations;
 
@@ -304,10 +304,10 @@ class PythonWindowActivator {
    * Obtient les statistiques de performance
    */
   getStats() {
-    const successRate = this.stats.activations > 0 ? 
+    const successRate = this.stats.activations > 0 ?
       (this.stats.successes / this.stats.activations * 100) : 100;
-    
-    const fastRate = this.stats.activations > 0 ? 
+
+    const fastRate = this.stats.activations > 0 ?
       (this.stats.fastActivations / this.stats.activations * 100) : 0;
 
     return {
@@ -330,7 +330,7 @@ class PythonWindowActivator {
       const command = `${this.pythonCommand} "${this.pythonScriptPath}" list`;
       const { stdout } = await execAsync(command, { timeout: 3000 });
       const result = JSON.parse(stdout.trim());
-      
+
       return {
         success: result.success,
         windowCount: result.count || 0,
@@ -348,9 +348,9 @@ class PythonWindowActivator {
    * Nettoyage
    */
   cleanup() {
-    console.log('PythonWindowActivator: Cleanup completed');
+    console.log('WindowActivator: Cleanup completed');
     console.log('Final Python activation stats:', this.getStats());
   }
 }
 
-module.exports = PythonWindowActivator;
+module.exports = WindowActivator;
