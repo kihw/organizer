@@ -43,7 +43,6 @@ class DofusOrganizerPython {
     app.whenReady().then(() => {
       this.loadSettings();
       this.migrateOldSettings();
-      this.startWindowDetection();
       this.setupIPC();
       this.createConfigWindow();
     });
