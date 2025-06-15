@@ -1,4 +1,5 @@
-const { ipcRenderer } = require('electron');
+const ipcRenderer = window.electronAPI?.ipcRenderer;
+
 
 console.log('Config.js: Loading...');
 
@@ -16,11 +17,11 @@ class ConfigRenderer {
         this.globalShortcuts = {};
         this.currentGlobalShortcutType = null;
         this.isLoading = false;
-        
+
         this.initializeElements();
         this.setupEventListeners();
         this.loadData();
-        
+
         console.log('Config.js: Initialized');
     }
 
@@ -41,7 +42,7 @@ class ConfigRenderer {
             shortcutsStatus: document.getElementById('shortcuts-status'),
             shortcutsStatusText: document.getElementById('shortcuts-status-text')
         };
-        
+
         console.log('Config.js: Elements found:', Object.keys(this.elements).filter(k => this.elements[k]));
     }
 
@@ -126,13 +127,13 @@ class ConfigRenderer {
         // Language modal
         const languageSave = document.getElementById('language-save');
         const languageCancel = document.getElementById('language-cancel');
-        
+
         if (languageSave) {
             languageSave.addEventListener('click', () => {
                 this.saveLanguage();
             });
         }
-        
+
         if (languageCancel) {
             languageCancel.addEventListener('click', () => {
                 this.hideLanguageModal();
@@ -143,19 +144,19 @@ class ConfigRenderer {
         const shortcutSave = document.getElementById('shortcut-save');
         const shortcutCancel = document.getElementById('shortcut-cancel');
         const shortcutRemove = document.getElementById('shortcut-remove');
-        
+
         if (shortcutSave) {
             shortcutSave.addEventListener('click', () => {
                 this.saveShortcut();
             });
         }
-        
+
         if (shortcutCancel) {
             shortcutCancel.addEventListener('click', () => {
                 this.closeShortcutModal();
             });
         }
-        
+
         if (shortcutRemove) {
             shortcutRemove.addEventListener('click', () => {
                 this.removeShortcut();
@@ -175,10 +176,10 @@ class ConfigRenderer {
         try {
             console.log('Config.js: Loading initial data...');
             this.isLoading = true;
-            
+
             this.language = await ipcRenderer.invoke('get-language');
             console.log('Config.js: Loaded language with keys:', Object.keys(this.language));
-            
+
             this.settings = await ipcRenderer.invoke('get-settings');
             console.log('Config.js: Loaded settings with keys:', Object.keys(this.settings));
 
@@ -190,23 +191,23 @@ class ConfigRenderer {
 
             this.globalShortcuts = await ipcRenderer.invoke('get-global-shortcuts');
             console.log('Config.js: Global shortcuts:', this.globalShortcuts);
-            
+
             this.windows = await ipcRenderer.invoke('get-dofus-windows');
             console.log('Config.js: Loaded windows:', this.windows);
-            
+
             this.renderWindows();
             this.updateLanguage();
             this.loadDockSettings();
             this.updateWindowCount();
             this.updateShortcutsUI();
             this.updateGlobalShortcutsDisplay();
-            
+
             this.isLoading = false;
-            
+
         } catch (error) {
             console.error('Config.js: Error loading data:', error);
             this.isLoading = false;
-            
+
             this.renderWindows();
             this.updateWindowCount();
         }
@@ -214,7 +215,7 @@ class ConfigRenderer {
 
     renderWindows() {
         console.log(`Config.js: Rendering ${this.windows.length} windows`);
-        
+
         if (!this.elements.windowsList || !this.elements.noWindows) {
             console.error('Config.js: Missing DOM elements for rendering');
             return;
@@ -236,7 +237,7 @@ class ConfigRenderer {
     showLoadingState() {
         this.elements.noWindows.style.display = 'block';
         this.elements.windowsList.style.display = 'none';
-        
+
         this.elements.noWindows.innerHTML = `
             <div class="no-windows-icon">⏳</div>
             <h3>Loading...</h3>
@@ -248,9 +249,9 @@ class ConfigRenderer {
         this.elements.noWindows.style.display = 'block';
         this.elements.windowsList.style.display = 'none';
         this.elements.windowsList.innerHTML = '';
-        
+
         const noWindowsText = this.language.displayGUI_nowindow || 'No Dofus windows detected. Make sure Dofus is running and click Refresh.';
-        
+
         this.elements.noWindows.innerHTML = `
             <div class="no-windows-icon">🎮</div>
             <h3>No Dofus Windows Detected</h3>
@@ -266,14 +267,14 @@ class ConfigRenderer {
         this.elements.windowsList.style.display = 'grid';
 
         let windowsHTML = '';
-        
+
         this.windows.forEach((window, index) => {
             const displayName = window.customName || window.character || 'Unknown';
             const shortcutText = window.shortcut || 'No shortcut';
             const avatarSrc = `../../assets/avatars/${window.avatar}.jpg`;
             const className = this.dofusClasses[window.dofusClass]?.name || 'Feca';
             const enabledClass = window.enabled ? 'enabled' : 'disabled';
-            
+
             windowsHTML += `
                 <div class="window-item ${enabledClass}" data-window-id="${window.id}" data-class="${window.dofusClass}">
                     <div class="window-header">
@@ -344,7 +345,7 @@ class ConfigRenderer {
         if (this.elements.windowCount) {
             const enabledCount = this.windows.filter(w => w.enabled).length;
             const totalCount = this.windows.length;
-            
+
             if (totalCount === 0) {
                 this.elements.windowCount.textContent = 'No windows detected';
             } else if (enabledCount === totalCount) {
@@ -359,7 +360,7 @@ class ConfigRenderer {
         if (this.elements.toggleShortcutsText) {
             this.elements.toggleShortcutsText.textContent = this.shortcutsEnabled ? 'Disable Shortcuts' : 'Enable Shortcuts';
         }
-        
+
         if (this.elements.toggleShortcutsBtn) {
             this.elements.toggleShortcutsBtn.className = this.shortcutsEnabled ? 'btn btn-secondary' : 'btn btn-primary';
         }
@@ -368,11 +369,11 @@ class ConfigRenderer {
     updateGlobalShortcutsDisplay() {
         const nextWindowDisplay = document.getElementById('next-window-shortcut-display');
         const toggleShortcutsDisplay = document.getElementById('toggle-shortcuts-shortcut-display');
-        
+
         if (nextWindowDisplay && this.globalShortcuts.nextWindow) {
             nextWindowDisplay.textContent = this.globalShortcuts.nextWindow;
         }
-        
+
         if (toggleShortcutsDisplay && this.globalShortcuts.toggleShortcuts) {
             toggleShortcutsDisplay.textContent = this.globalShortcuts.toggleShortcuts;
         }
@@ -382,7 +383,7 @@ class ConfigRenderer {
         if (this.elements.shortcutsStatus && this.elements.shortcutsStatusText) {
             this.elements.shortcutsStatusText.textContent = `Shortcuts: ${this.shortcutsEnabled ? 'Enabled' : 'Disabled'}`;
             this.elements.shortcutsStatus.className = `shortcuts-status show ${this.shortcutsEnabled ? 'enabled' : 'disabled'}`;
-            
+
             setTimeout(() => {
                 this.elements.shortcutsStatus.classList.remove('show');
             }, 3000);
@@ -414,7 +415,7 @@ class ConfigRenderer {
         if (this.elements.dockEnabled && this.settings.dock) {
             this.elements.dockEnabled.checked = this.settings.dock.enabled || false;
         }
-        
+
         if (this.elements.dockPosition && this.settings.dock) {
             this.elements.dockPosition.value = this.settings.dock.position || 'SE';
         }
@@ -432,9 +433,9 @@ class ConfigRenderer {
             console.log('Config.js: Refreshing windows...');
             this.elements.refreshBtn.disabled = true;
             this.elements.refreshBtn.innerHTML = '<span>⏳ Refreshing...</span>';
-            
+
             await ipcRenderer.invoke('refresh-windows');
-            
+
             setTimeout(async () => {
                 try {
                     this.windows = await ipcRenderer.invoke('get-dofus-windows');
@@ -448,7 +449,7 @@ class ConfigRenderer {
                     this.elements.refreshBtn.innerHTML = '<span>🔄 Refresh</span>';
                 }
             }, 1000);
-            
+
         } catch (error) {
             console.error('Config.js: Error refreshing windows:', error);
             this.elements.refreshBtn.disabled = false;
@@ -550,7 +551,7 @@ class ConfigRenderer {
         try {
             console.log(`Config.js: Removing global shortcut for ${type}`);
             await ipcRenderer.invoke('remove-global-shortcut', type);
-            
+
             // CORRECTION: Recharger et mettre à jour l'affichage
             await this.loadGlobalShortcuts();
             this.updateGlobalShortcutsDisplay();
@@ -568,7 +569,7 @@ class ConfigRenderer {
             if (radioButton) {
                 radioButton.checked = true;
             }
-            
+
             modal.style.display = 'flex';
         }
     }
@@ -583,7 +584,7 @@ class ConfigRenderer {
     async saveLanguage() {
         const modal = document.getElementById('language-modal');
         const selectedRadio = modal.querySelector('input[name="language"]:checked');
-        
+
         if (selectedRadio) {
             try {
                 const settings = { language: selectedRadio.value };
@@ -607,7 +608,7 @@ class ConfigRenderer {
         try {
             console.log(`Config.js: Organizing windows with layout: ${layout}`);
             await ipcRenderer.invoke('organize-windows', layout);
-            
+
             const modal = document.getElementById('organize-modal');
             if (modal) {
                 modal.style.display = 'none';
@@ -627,7 +628,7 @@ class ConfigRenderer {
         const modal = document.getElementById('shortcut-modal');
         const display = document.getElementById('shortcut-display');
         const title = document.getElementById('shortcut-title');
-        
+
         if (modal && display && title) {
             if (isGlobal) {
                 this.currentShortcutWindowId = null;
@@ -640,37 +641,37 @@ class ConfigRenderer {
                 const window = this.windows.find(w => w.id === windowId);
                 display.textContent = window?.shortcut || 'Press any key or combination...';
             }
-            
+
             this.currentShortcut = '';
             display.classList.add('recording');
             modal.style.display = 'flex';
-            
+
             this.setupShortcutCapture();
         }
     }
 
     setupShortcutCapture() {
         const display = document.getElementById('shortcut-display');
-        
+
         const keyHandler = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            
+
             console.log('Key pressed:', e.key, 'Code:', e.code, 'Modifiers:', {
                 ctrl: e.ctrlKey,
                 alt: e.altKey,
                 shift: e.shiftKey,
                 meta: e.metaKey
             });
-            
+
             const keys = [];
-            
+
             if (e.ctrlKey || e.metaKey) keys.push('Ctrl');
             if (e.altKey) keys.push('Alt');
             if (e.shiftKey) keys.push('Shift');
-            
+
             let mainKey = '';
-            
+
             const specialKeys = {
                 ' ': 'Space',
                 'Enter': 'Return',
@@ -698,7 +699,7 @@ class ConfigRenderer {
                 ']': ']',
                 '\\': '\\'
             };
-            
+
             if (e.key.match(/^F\d+$/)) {
                 mainKey = e.key;
             } else if (specialKeys[e.key]) {
@@ -710,25 +711,25 @@ class ConfigRenderer {
             } else if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
                 return;
             }
-            
+
             if (mainKey) {
                 keys.push(mainKey);
                 this.currentShortcut = keys.join('+');
                 display.textContent = this.currentShortcut;
                 display.classList.remove('recording');
                 display.classList.add('captured');
-                
+
                 console.log('Captured shortcut:', this.currentShortcut);
             }
         };
-        
+
         if (this.currentKeyHandler) {
             document.removeEventListener('keydown', this.currentKeyHandler);
         }
-        
+
         document.addEventListener('keydown', keyHandler);
         this.currentKeyHandler = keyHandler;
-        
+
         const modal = document.getElementById('shortcut-modal');
         if (modal) {
             modal.focus();
@@ -741,9 +742,9 @@ class ConfigRenderer {
                 if (this.currentGlobalShortcutType) {
                     // CORRECTION: Sauvegarder le raccourci global
                     console.log(`Config.js: Saving global shortcut ${this.currentShortcut} for ${this.currentGlobalShortcutType}`);
-                    
+
                     const success = await ipcRenderer.invoke('set-global-shortcut', this.currentGlobalShortcutType, this.currentShortcut);
-                    
+
                     if (success) {
                         // CORRECTION: Recharger et mettre à jour l'affichage
                         await this.loadGlobalShortcuts();
@@ -755,9 +756,9 @@ class ConfigRenderer {
                     }
                 } else if (this.currentShortcutWindowId) {
                     console.log(`Config.js: Saving shortcut ${this.currentShortcut} for window ${this.currentShortcutWindowId}`);
-                    
+
                     const success = await ipcRenderer.invoke('set-shortcut', this.currentShortcutWindowId, this.currentShortcut);
-                    
+
                     if (success) {
                         const window = this.windows.find(w => w.id === this.currentShortcutWindowId);
                         if (window) {
@@ -778,7 +779,7 @@ class ConfigRenderer {
             console.warn('Config.js: No shortcut to save');
             alert('Please press a key or key combination first.');
         }
-        
+
         this.closeShortcutModal();
     }
 
@@ -788,7 +789,7 @@ class ConfigRenderer {
         } else if (this.currentShortcutWindowId) {
             try {
                 await ipcRenderer.invoke('remove-shortcut', this.currentShortcutWindowId);
-                
+
                 const window = this.windows.find(w => w.id === this.currentShortcutWindowId);
                 if (window) {
                     window.shortcut = null;
@@ -798,27 +799,27 @@ class ConfigRenderer {
                 console.error('Config.js: Error removing shortcut:', error);
             }
         }
-        
+
         this.closeShortcutModal();
     }
 
     closeShortcutModal() {
         const modal = document.getElementById('shortcut-modal');
         const display = document.getElementById('shortcut-display');
-        
+
         if (modal) {
             modal.style.display = 'none';
         }
-        
+
         if (display) {
             display.classList.remove('recording', 'captured');
         }
-        
+
         if (this.currentKeyHandler) {
             document.removeEventListener('keydown', this.currentKeyHandler);
             this.currentKeyHandler = null;
         }
-        
+
         this.currentShortcutWindowId = null;
         this.currentGlobalShortcutType = null;
         this.currentShortcut = '';
@@ -828,17 +829,17 @@ class ConfigRenderer {
     showClassModal(windowId) {
         const modal = document.getElementById('class-modal');
         const classGrid = document.getElementById('class-grid');
-        
+
         if (modal && classGrid) {
             this.currentClassWindowId = windowId;
-            
+
             let classHTML = '';
             Object.keys(this.dofusClasses).forEach(classKey => {
                 const classInfo = this.dofusClasses[classKey];
                 const avatarSrc = `../../assets/avatars/${classInfo.avatar}.jpg`;
                 const window = this.windows.find(w => w.id === windowId);
                 const isSelected = window && window.dofusClass === classKey;
-                
+
                 classHTML += `
                     <div class="class-option ${isSelected ? 'selected' : ''}" 
                          onclick="configRenderer.selectClass('${classKey}')"
@@ -849,7 +850,7 @@ class ConfigRenderer {
                     </div>
                 `;
             });
-            
+
             classGrid.innerHTML = classHTML;
             modal.style.display = 'flex';
         }
@@ -860,12 +861,12 @@ class ConfigRenderer {
         classOptions.forEach(option => {
             option.classList.remove('selected');
         });
-        
+
         const selectedOption = document.querySelector(`[data-class="${classKey}"]`);
         if (selectedOption) {
             selectedOption.classList.add('selected');
         }
-        
+
         this.saveClassChange(classKey);
     }
 
@@ -874,14 +875,14 @@ class ConfigRenderer {
             try {
                 const settings = { [`classes.${this.currentClassWindowId}`]: classKey };
                 await ipcRenderer.invoke('save-settings', settings);
-                
+
                 const window = this.windows.find(w => w.id === this.currentClassWindowId);
                 if (window) {
                     window.dofusClass = classKey;
                     window.avatar = this.dofusClasses[classKey].avatar;
                     this.renderWindows();
                 }
-                
+
                 setTimeout(() => {
                     this.closeClassModal();
                 }, 300);
@@ -896,7 +897,7 @@ class ConfigRenderer {
         if (modal) {
             modal.style.display = 'none';
         }
-        
+
         this.currentClassWindowId = null;
     }
 
@@ -906,7 +907,7 @@ class ConfigRenderer {
                 'dock.enabled': this.elements.dockEnabled?.checked || false,
                 'dock.position': this.elements.dockPosition?.value || 'SE'
             };
-            
+
             await ipcRenderer.invoke('save-settings', dockSettings);
             console.log('Config.js: Updated dock settings:', dockSettings);
         } catch (error) {
