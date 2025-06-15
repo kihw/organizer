@@ -262,8 +262,6 @@ class DofusOrganizer {
       // Display the configuration window once it's ready
       this.mainWindow.show();
 
-      // Utiliser le WindowActivator (placeholder)
-      this.windowActivator.bringWindowToFront('config-window');
 
       // Force refresh windows when config opens
       setTimeout(() => {
