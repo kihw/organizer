@@ -1,5 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen } = require('electron');
+const { spawn } = require('child_process');
 const path = require('path');
+const { bringWindowToFront } = require('./services/DummyWindowActivator');
 const Store = require('electron-store');
 const ShortcutManager = require('./services/ShortcutManager');
 const ShortcutConfigManager = require('./services/ShortcutConfigManager');
@@ -178,7 +180,7 @@ class DofusOrganizer {
     
     if (this.mainWindow) {
       console.log('DofusOrganizer: Config window already exists, focusing...');
-      this.mainWindow.focus();
+      bringWindowToFront();
       return;
     }
 
@@ -204,6 +206,7 @@ class DofusOrganizer {
     this.mainWindow.once('ready-to-show', () => {
       console.log('DofusOrganizer: Config window ready to show');
       this.mainWindow.show();
+      spawn('python', ['afficher_fenetre.py', this.mainWindow.getTitle()], { detached: true });
       
       // Force refresh windows when config opens
       setTimeout(() => {

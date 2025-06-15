@@ -1,5 +1,6 @@
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 const { promisify } = require('util');
+const { bringWindowToFront } = require('./DummyWindowActivator');
 const execAsync = promisify(exec);
 
 class WindowManagerWindows {
@@ -8,7 +9,6 @@ class WindowManagerWindows {
     this.lastWindowCheck = 0;
     this.psScriptPath = null;
     this.psScriptReady = false;
-    this.activationCache = new Map();
     this.windowIdMapping = new Map(); // Map stable IDs to current window handles
     
     // Define available classes and their corresponding avatars
@@ -704,57 +704,9 @@ try {
   async activateWindow(windowId) {
     try {
       console.log(`WindowManagerWindows: Activating window ${windowId}`);
-      
-      // Get the actual window handle from the stable ID
-      const windowHandle = this.windowIdMapping.get(windowId);
-      if (!windowHandle) {
-        console.error(`WindowManagerWindows: No handle found for window ID ${windowId}`);
-        return false;
-      }
-      
-      // Check cache first for faster activation
-      const cacheKey = windowHandle;
-      const now = Date.now();
-      
-      if (this.activationCache.has(cacheKey)) {
-        const lastActivation = this.activationCache.get(cacheKey);
-        if (now - lastActivation < 300) { // 300ms cooldown
-          console.log(`WindowManagerWindows: Activation cooldown active for ${windowId}`);
-          return true;
-        }
-      }
-      
-      if (this.psScriptReady && this.psScriptPath) {
-        const command = `powershell.exe -ExecutionPolicy Bypass -File "${this.psScriptPath}" activate "${windowHandle}"`;
-        const { stdout, stderr } = await execAsync(command, { timeout: 2000 }); // Reduced timeout for speed
-        
-        if (stderr && stderr.trim()) {
-          console.warn(`WindowManagerWindows: PowerShell activation stderr: ${stderr}`);
-        }
-        
-        const success = stdout.trim() === 'true';
-        console.log(`WindowManagerWindows: PowerShell activation result: ${success}`);
-        
-        if (success) {
-          // Cache successful activation
-          this.activationCache.set(cacheKey, now);
-          
-          // Clean up old cache entries
-          if (this.activationCache.size > 50) {
-            const oldestKey = this.activationCache.keys().next().value;
-            this.activationCache.delete(oldestKey);
-          }
-          
-          // Update active state immediately
-          this.updateActiveState(windowId);
-        }
-        
-        return success;
-      } else {
-        // Fallback activation method
-        console.log(`WindowManagerWindows: Using fallback activation for ${windowId}`);
-        return this.activateWindowFallback(windowId);
-      }
+      bringWindowToFront();
+      this.updateActiveState(windowId);
+      return true;
     } catch (error) {
       console.error('WindowManagerWindows: Error activating window:', error);
       return false;
@@ -768,17 +720,6 @@ try {
     }
   }
 
-  async activateWindowFallback(windowId) {
-    try {
-      // For fallback windows, just return success
-      console.log(`WindowManagerWindows: Fallback window ${windowId} activated (simulated)`);
-      this.updateActiveState(windowId);
-      return true;
-    } catch (error) {
-      console.error('WindowManagerWindows: Fallback activation failed:', error);
-      return false;
-    }
-  }
 
   async moveWindow(windowId, x, y, width = -1, height = -1) {
     try {
@@ -965,8 +906,6 @@ try {
       }
     }
     
-    // Clear activation cache
-    this.activationCache.clear();
     this.windowIdMapping.clear();
   }
 }
