@@ -343,7 +343,7 @@ src/
 │   ├── ShortcutManager.js  # Ultra-fast shortcut management
 │   ├── WindowManager.js    # Optimized window management
 │   ├── NotificationManager.js # Enhanced user feedback
-│   ├── ShortcutConfigManager.js # Character-based persistence
+│   ├── ShortcutConfig.js # Character-based persistence
 │   └── LanguageManager.js    # Internationalization
 └── renderer/                  # Enhanced UI components
     ├── config.html           # Enhanced configuration interface
