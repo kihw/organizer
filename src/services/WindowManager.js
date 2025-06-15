@@ -1,4 +1,5 @@
 const WindowActivator = require('./WindowActivator');
+const WindowDetector = require('./WindowDetector');
 const eventBus = require('../core/EventBus');
 const performanceMonitor = require('../core/PerformanceMonitor');
 
@@ -9,6 +10,7 @@ const performanceMonitor = require('../core/PerformanceMonitor');
 class PythonWindowManager {
   constructor() {
     this.pythonActivator = new WindowActivator();
+    this.detector = new WindowDetector();
     this.lastDetectedWindows = [];
     this.isScanning = false;
 
@@ -93,10 +95,10 @@ class PythonWindowManager {
       }
 
       this.isScanning = true;
-      console.log('PythonWindowManager: Starting Python detection...');
+      console.log('PythonWindowManager: Starting JS detection...');
 
-      // Détection via Python
-      const windows = await this.pythonActivator.getDofusWindows();
+      // Detection via JavaScript
+      const windows = await this.detector.getDofusWindows();
 
       if (windows && windows.length >= 0) {
         // Enrichir les fenêtres avec les données stockées
@@ -113,7 +115,7 @@ class PythonWindowManager {
         this.lastDetectedWindows = enrichedWindows;
 
         const duration = Date.now() - startTime;
-        console.log(`PythonWindowManager: Detected ${enrichedWindows.length} windows in ${duration}ms`);
+        console.log(`PythonWindowManager: Detected ${enrichedWindows.length} windows in ${duration}ms (JS)`);
       }
 
       return this.lastDetectedWindows;
