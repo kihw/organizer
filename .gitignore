@@ -136,3 +136,5 @@ shortcuts.json.backup
 # Test files
 test-results/
 coverage/
+
+package-lock.json
