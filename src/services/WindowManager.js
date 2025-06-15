@@ -1,5 +1,6 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const { bringWindowToFront } = require('./DummyWindowActivator');
 const execAsync = promisify(exec);
 
 class WindowManager {
@@ -687,56 +688,14 @@ class WindowManager {
   async activateWindow(windowId) {
     try {
       console.log(`WindowManager: Activating window ${windowId}`);
-      
-      // Get the actual window handle from the stable ID
-      const windowHandle = this.windowIdMapping.get(windowId);
-      if (!windowHandle) {
-        console.error(`WindowManager: No handle found for window ID ${windowId}`);
-        return false;
-      }
-      
-      if (this.isLinux) {
-        return await this.activateLinuxWindow(windowHandle);
-      } else {
-        return this.activateFallbackWindow(windowId);
-      }
+      bringWindowToFront();
+      return true;
     } catch (error) {
       console.error('Error activating window:', error);
       return false;
     }
   }
 
-  async activateLinuxWindow(windowHandle) {
-    try {
-      // Try multiple methods to activate window on Linux
-      const commands = [
-        `wmctrl -i -a ${windowHandle}`,
-        `xdotool windowactivate ${windowHandle}`,
-        `xprop -id ${windowHandle} -f _NET_ACTIVE_WINDOW 32a -set _NET_ACTIVE_WINDOW 1`
-      ];
-
-      for (const command of commands) {
-        try {
-          await execAsync(command + ' 2>/dev/null');
-          return true;
-        } catch (e) {
-          // Try next command
-          continue;
-        }
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error activating Linux window:', error);
-      return false;
-    }
-  }
-
-  activateFallbackWindow(windowId) {
-    // Fallback activation method
-    console.log(`Attempting to activate window: ${windowId}`);
-    return true;
-  }
 
   async moveWindow(windowId, x, y) {
     try {

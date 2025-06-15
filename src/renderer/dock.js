@@ -38,12 +38,7 @@ class DockRenderer {
 
         // Handle window focus/blur
         window.addEventListener('blur', () => {
-            // Keep dock always on top
-            setTimeout(() => {
-                if (window.electronAPI) {
-                    window.electronAPI.setAlwaysOnTop(true);
-                }
-            }, 100);
+            // Placeholder for focus handling
         });
 
         // Handle keyboard shortcuts for quick window access
