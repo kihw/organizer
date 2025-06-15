@@ -3,9 +3,12 @@
  * Cette fonction sert de placeholder uniforme pour tous les appels de mise au premier plan
  */
 
+const { spawn } = require('child_process');
+const path = require('path');
+
 class WindowActivator {
     constructor() {
-        console.log('WindowActivator: Initialized (no window activation logic)');
+        console.log('WindowActivator: Initialized (using Python script)');
     }
 
     /**
@@ -13,10 +16,12 @@ class WindowActivator {
      * @param {string} windowId - ID de la fenêtre (ignoré)
      * @returns {boolean} - Toujours true pour maintenir la compatibilité
      */
-    bringWindowToFront(windowId = null) {
-        // Fonction volontairement vide (placeholder)
-        console.log(`WindowActivator: bringWindowToFront called${windowId ? ` for ${windowId}` : ''} - no action taken`);
-        return true;
+    bringWindowToFront(windowTitle = null) {
+        if (!windowTitle) {
+            console.log('WindowActivator: bringWindowToFront called with no title');
+            return false;
+        }
+        return this.runPythonScript(windowTitle);
     }
 
     /**
@@ -24,10 +29,12 @@ class WindowActivator {
      * @param {string} windowId - ID de la fenêtre (ignoré)
      * @returns {Promise<boolean>} - Toujours true pour maintenir la compatibilité
      */
-    async activateWindow(windowId) {
-        // Fonction volontairement vide (placeholder)
-        console.log(`WindowActivator: activateWindow called for ${windowId} - no action taken`);
-        return true;
+    async activateWindow(windowTitle) {
+        if (!windowTitle) {
+            console.log('WindowActivator: activateWindow called with no title');
+            return false;
+        }
+        return this.runPythonScript(windowTitle);
     }
 
     /**
@@ -35,10 +42,35 @@ class WindowActivator {
      * @param {string} windowId - ID de la fenêtre (ignoré)
      * @returns {boolean} - Toujours true pour maintenir la compatibilité
      */
-    focusWindow(windowId = null) {
-        // Fonction volontairement vide (placeholder)
-        console.log(`WindowActivator: focusWindow called${windowId ? ` for ${windowId}` : ''} - no action taken`);
-        return true;
+    focusWindow(windowTitle = null) {
+        if (!windowTitle) {
+            console.log('WindowActivator: focusWindow called with no title');
+            return false;
+        }
+        return this.runPythonScript(windowTitle);
+    }
+
+    runPythonScript(title) {
+        return new Promise((resolve) => {
+            const scriptPath = path.join(__dirname, '..', 'script', 'afficher_fenete.py');
+            const proc = spawn('python', [scriptPath, title]);
+
+            let resolved = false;
+            const finish = (code) => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(code === 0);
+                }
+            };
+
+            proc.on('error', () => {
+                const proc3 = spawn('python3', [scriptPath, title]);
+                proc3.on('close', finish);
+                proc3.on('error', () => finish(1));
+            });
+
+            proc.on('close', finish);
+        });
     }
 
     /**
@@ -66,22 +98,19 @@ class WindowActivator {
 }
 
 // Export des fonctions pour compatibilité
-function bringWindowToFront(windowId = null) {
-    // Fonction volontairement vide (placeholder)
-    console.log(`WindowActivator: Global bringWindowToFront called${windowId ? ` for ${windowId}` : ''} - no action taken`);
-    return true;
+function bringWindowToFront(windowTitle = null) {
+    const activator = new WindowActivator();
+    return activator.bringWindowToFront(windowTitle);
 }
 
-function activateWindow(windowId) {
-    // Fonction volontairement vide (placeholder)
-    console.log(`WindowActivator: Global activateWindow called for ${windowId} - no action taken`);
-    return Promise.resolve(true);
+function activateWindow(windowTitle) {
+    const activator = new WindowActivator();
+    return activator.activateWindow(windowTitle);
 }
 
-function focusWindow(windowId = null) {
-    // Fonction volontairement vide (placeholder)
-    console.log(`WindowActivator: Global focusWindow called${windowId ? ` for ${windowId}` : ''} - no action taken`);
-    return true;
+function focusWindow(windowTitle = null) {
+    const activator = new WindowActivator();
+    return activator.focusWindow(windowTitle);
 }
 
 module.exports = WindowActivator;
