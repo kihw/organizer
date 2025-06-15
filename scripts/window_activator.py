@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Script Python pour l'activation ultra-rapide des fenêtres Dofus
-Objectif: <50ms d'activation
+"""Activate a Dofus window by character name.
+This script is intentionally minimal. Detection of windows is handled in JavaScript.
 """
 
 import sys
@@ -82,6 +81,7 @@ def bring_window_to_front(partial_title):
             "duration": (time.time() - start_time) * 1000,
             "window_title": None
         }
+
 
 def list_dofus_windows():
     """
@@ -183,48 +183,22 @@ def list_dofus_windows():
             "duration": (time.time() - start_time) * 1000
         }
 
+
 def main():
     """Point d'entrée principal du script"""
     
     if len(sys.argv) < 2:
         print(json.dumps({
             "success": False,
-            "error": "Usage: python window_activator.py <action> [parameters]",
-            "help": {
-                "activate": "python window_activator.py activate <window_title>",
-                "list": "python window_activator.py list"
-            }
+            "error": "Usage: python window_activator.py <character_name>"
         }))
         sys.exit(1)
-    
-    action = sys.argv[1].lower()
-    
-    if action == "activate":
-        if len(sys.argv) < 3:
-            print(json.dumps({
-                "success": False,
-                "error": "Usage: python window_activator.py activate <window_title>"
-            }))
-            sys.exit(1)
-        
-        partial_title = " ".join(sys.argv[2:])
-        result = bring_window_to_front(partial_title)
-        print(json.dumps(result))
-        
-        # Code de sortie basé sur le succès
-        sys.exit(0 if result["success"] else 1)
-        
-    elif action == "list":
-        result = list_dofus_windows()
-        print(json.dumps(result, indent=2))
-        sys.exit(0)
-        
-    else:
-        print(json.dumps({
-            "success": False,
-            "error": f"Action inconnue: {action}. Actions disponibles: activate, list"
-        }))
-        sys.exit(1)
+
+    character_name = " ".join(sys.argv[1:])
+    result = bring_window_to_front(character_name)
+    print(json.dumps(result))
+
+    sys.exit(0 if result["success"] else 1)
 
 if __name__ == "__main__":
     main()

@@ -2,13 +2,14 @@ const { app, BrowserWindow, globalShortcut, screen, ipcMain } = require('electro
 const path = require('path');
 const Store = require('electron-store');
 
+
 // Import your custom modules (adjust paths as needed)
-const performanceMonitor = require('./services/PerformanceMonitor');
+const performanceMonitor = require('./core/PerformanceMonitor');
 const LanguageManager = require('./services/LanguageManager');
 const ShortcutManager = require('./services/ShortcutManager');
-const ShortcutConfig = require('./services/ShortcutConfig');
-const WindowManager = require('./services/WindowManager');
+const PythonWindowManager = require('./services/WindowManager');
 const NotificationManager = require('./services/NotificationManager');
+const ShortcutConfig = require('./services/ShortcutConfig');  // Add this import
 
 class DofusOrganizerPython {
   constructor() {
@@ -22,10 +23,10 @@ class DofusOrganizerPython {
     // Initialize services
     this.store = new Store();
     this.languageManager = new LanguageManager();
-    this.shortcutConfig = new ShortcutConfig();
     this.shortcutManager = new ShortcutManager();
-    this.windowManager = new WindowManager();
+    this.windowManager = new PythonWindowManager();
     this.notificationManager = new NotificationManager();
+    this.shortcutConfig = new ShortcutConfig(); // Add this initialization
 
     // Global shortcuts tracking
     this.globalShortcuts = {
@@ -43,8 +44,6 @@ class DofusOrganizerPython {
       this.loadSettings();
       this.migrateOldSettings();
       this.setupIPC();
-      // Create the main configuration window on startup so the
-      // application is visible immediately
       this.createConfigWindow();
     });
 
@@ -148,6 +147,9 @@ class DofusOrganizerPython {
     );
   }
 
+
+
+
   createConfigWindow() {
     if (this.mainWindow) {
       this.mainWindow.focus();
@@ -157,21 +159,43 @@ class DofusOrganizerPython {
     this.mainWindow = new BrowserWindow({
       width: 1200,
       height: 800,
+      show: false, // 👈 attend ready-to-show avant d'afficher
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false // important si tu manipules ipcRenderer
       }
     });
 
-    this.mainWindow.loadFile(path.join(__dirname, 'renderer/config.html'));
+    // Charger le fichier HTML
+    this.mainWindow.loadFile(path.join(__dirname, 'renderer/config.html'))
+      .then(() => {
+        console.log('[Electron] config.html chargé avec succès');
+      })
+      .catch(err => {
+        console.error('[Electron] Échec du chargement de config.html:', err);
+      });
 
-    this.mainWindow.on('closed', () => {
-      console.log('DofusOrganizerPython: Python config window closed');
-      this.mainWindow = null;
-      this.isConfiguring = false;
-      this.activateShortcuts();
+    // Afficher la fenêtre quand elle est prête
+    this.mainWindow.once('ready-to-show', () => {
+      console.log('[Electron] Fenêtre prête, affichage...');
+      this.mainWindow.show();
+
+      if (process.argv.includes('--dev')) {
+        this.mainWindow.webContents.openDevTools();
+      }
     });
 
+    // Nettoyage lors de la fermeture
+    this.mainWindow.on('closed', () => {
+      console.log('[Electron] Fenêtre de configuration fermée');
+      this.mainWindow = null;
+      this.isConfiguring = false;
+      this.activateShortcuts(); // Restaurer les raccourcis
+    });
+
+    // Désactiver les raccourcis pendant la config
     this.isConfiguring = true;
     this.deactivateShortcuts();
 
