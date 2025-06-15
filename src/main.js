@@ -258,10 +258,11 @@ class DofusOrganizer {
 
     this.mainWindow.once('ready-to-show', () => {
       console.log('DofusOrganizer: Config window ready to show');
-      // SUPPRIMÉ: this.mainWindow.show();
-      // SUPPRIMÉ: Toute logique de focus ou setAlwaysOnTop
 
-      // Utiliser le WindowActivator
+      // Display the configuration window once it's ready
+      this.mainWindow.show();
+
+      // Utiliser le WindowActivator (placeholder)
       this.windowActivator.bringWindowToFront('config-window');
 
       // Force refresh windows when config opens
