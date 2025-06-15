@@ -136,7 +136,7 @@ class ProcessDiagnostic {
             PID = $_.Id;
             Handle = $_.MainWindowHandle.ToInt64();
             WindowClass = try { 
-              Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;using System.Text;public class Win32{[DllImport(\"user32.dll\")]public static extern int GetClassName(IntPtr hWnd,StringBuilder lpClassName,int nMaxCount);}'
+              Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;using System.Text;public class Win32{[DllImport("user32.dll")]public static extern int GetClassName(IntPtr hWnd,StringBuilder lpClassName,int nMaxCount);}'
               $sb = New-Object System.Text.StringBuilder 256
               [Win32]::GetClassName([IntPtr]$_.MainWindowHandle, $sb, 256)
               $sb.ToString()
@@ -181,7 +181,7 @@ class ProcessDiagnostic {
       console.log(`🧪 TEST D'ACTIVATION DIRECTE pour handle ${handle}`);
 
       const command = `powershell.exe -NoProfile -Command "
-        Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'
+        Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'
         $hwnd = [IntPtr]${handle}
         [Win32]::ShowWindow($hwnd, 9)
         $result = [Win32]::SetForegroundWindow($hwnd)

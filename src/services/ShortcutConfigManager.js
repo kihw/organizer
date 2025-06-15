@@ -442,7 +442,7 @@ class ShortcutConfigManager {
       }
 
       // Backup current config
-      const _backupConfig = { ...this.config };
+      // const _backupConfig = { ...this.config }; // TODO: Implement backup logic
 
       // Merge imported config
       this.config = {
