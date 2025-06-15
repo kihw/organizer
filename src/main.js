@@ -208,7 +208,7 @@ class DofusOrganizer {
     console.log('DofusOrganizer: Launching Python interface...');
 
     try {
-      const pythonScript = path.join(__dirname, 'script', 'afficher_fenetre.py');
+      const pythonScript = path.join(__dirname, '..', 'script', 'afficher_fenetre.py');
 
       // Lancer le script Python en mode détaché
       const pythonProcess = spawn('python', [pythonScript], {
