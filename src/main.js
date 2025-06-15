@@ -66,15 +66,12 @@ class DofusOrganizerPython {
   }
 
   detectDofusWindows() {
-    this.windowManager.getDofusWindows().then(windows => {
-      this.dofusWindows = windows;
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-        console.log(`DofusOrganizerPython: Sending current ${windows.length} windows to config`);
-        this.mainWindow.webContents.send('windows-updated', windows);
-      }
-    }).catch(error => {
-      console.error('DofusOrganizerPython: Error detecting windows:', error);
-    });
+    // Implement window detection logic here
+    // This is a placeholder - implement your actual window detection
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      console.log(`DofusOrganizerPython: Sending current ${this.dofusWindows.length} windows to config`);
+      this.mainWindow.webContents.send('windows-updated', this.dofusWindows);
+    }
   }
 
   setupIPC() {
@@ -85,31 +82,6 @@ class DofusOrganizerPython {
 
     ipcMain.on('toggle-shortcuts', () => {
       this.toggleShortcuts();
-    });
-
-    ipcMain.handle('get-dofus-windows', async () => {
-      const windows = await this.windowManager.getDofusWindows();
-      this.dofusWindows = windows;
-      return windows;
-    });
-
-    ipcMain.handle('refresh-windows', async () => {
-      const windows = await this.windowManager.getDofusWindows();
-      this.dofusWindows = windows;
-      this.detectDofusWindows();
-      return windows;
-    });
-
-    ipcMain.handle('get-language', () => {
-      return this.languageManager.getCurrentLanguage();
-    });
-
-    ipcMain.handle('get-settings', () => {
-      return this.notificationManager.getSettings();
-    });
-
-    ipcMain.handle('get-dofus-classes', () => {
-      return this.windowManager.getDofusClasses();
     });
   }
 
@@ -198,10 +170,6 @@ class DofusOrganizerPython {
     // Désactiver les raccourcis pendant la config
     this.isConfiguring = true;
     this.deactivateShortcuts();
-
-    // Start window detection when the config window is created
-    this.detectDofusWindows();
-    this.startWindowDetection();
   }
 
   showDockWindow() {
