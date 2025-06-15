@@ -411,8 +411,8 @@ class DofusOrganizer {
 
     if (nextWindow) {
       console.log(`DofusOrganizer: Activating next window: ${nextWindow.character}`);
-      // Utiliser le WindowActivator au lieu de windowManager.activateWindow
-      this.windowActivator.activateWindow(nextWindow.id);
+      // Send the window title to the WindowActivator
+      this.windowActivator.activateWindow(nextWindow.title);
     }
   }
 
@@ -606,8 +606,11 @@ class DofusOrganizer {
       console.log(`IPC: activate-window called for: ${windowId}`);
 
       try {
-        // MODIFIÉ: Utiliser WindowActivator au lieu de windowManager
-        const result = await this.windowActivator.activateWindow(windowId);
+        const window = this.dofusWindows.find(w => w.id === windowId);
+        const title = window ? window.title : null;
+
+        // Send the title to the WindowActivator
+        const result = await this.windowActivator.activateWindow(title);
 
         // Enhanced activation with immediate feedback
         if (result) {
@@ -668,7 +671,8 @@ class DofusOrganizer {
       // Register the shortcut - MODIFIÉ: utiliser WindowActivator
       return this.shortcutManager.setWindowShortcut(windowId, shortcut, async () => {
         console.log(`ShortcutManager: Executing shortcut for window ${windowId} (dummy)`);
-        await this.windowActivator.activateWindow(windowId);
+        const windowTitle = window.title;
+        await this.windowActivator.activateWindow(windowTitle);
       });
     });
 
@@ -822,7 +826,7 @@ class DofusOrganizer {
         // MODIFIÉ: utiliser WindowActivator
         const success = this.shortcutManager.setWindowShortcut(window.id, existingShortcut, async () => {
           console.log(`ShortcutManager: Executing shortcut for window ${window.id} (dummy)`);
-          await this.windowActivator.activateWindow(window.id);
+          await this.windowActivator.activateWindow(window.title);
         });
 
         if (success) {

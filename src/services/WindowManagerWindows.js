@@ -617,8 +617,11 @@ try {
         return false;
       }
 
-      // MODIFIÉ: Utiliser WindowActivator au lieu de la logique PowerShell
-      const result = await this.windowActivator.activateWindow(windowId);
+      const windowInfo = this.windows.get(windowId);
+      const title = windowInfo ? windowInfo.info.title : null;
+
+      // Utiliser le WindowActivator avec le titre de la fenêtre
+      const result = await this.windowActivator.activateWindow(title);
 
       if (result) {
         // Update active state immediately
@@ -678,7 +681,7 @@ try {
       for (let i = 0; i < enabledWindows.length; i++) {
         const windowData = enabledWindows[i];
         console.log(`WindowManagerWindows: Organizing window ${i + 1}/${enabledWindows.length}: ${windowData.info.character} (dummy)`);
-        await this.windowActivator.activateWindow(windowData.info.id);
+        await this.windowActivator.activateWindow(windowData.info.title);
       }
 
       return true;
