@@ -77,6 +77,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "src/script/",
+        "to": "script/",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {

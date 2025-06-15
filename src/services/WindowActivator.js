@@ -5,10 +5,14 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
+const { app } = require('electron');
 
 class WindowActivator {
     constructor() {
         console.log('WindowActivator: Initialized (using Python script)');
+        this.scriptPath = app.isPackaged
+            ? path.join(process.resourcesPath, 'script', 'afficher_fenetre.py')
+            : path.join(__dirname, '..', 'script', 'afficher_fenetre.py');
     }
 
     /**
@@ -52,7 +56,7 @@ class WindowActivator {
 
     runPythonScript(title) {
         return new Promise((resolve) => {
-            const scriptPath = path.join(__dirname, '..', 'script', 'afficher_fenetre.py');
+            const scriptPath = this.scriptPath;
             const proc = spawn('python', [scriptPath, title]);
 
             let resolved = false;
