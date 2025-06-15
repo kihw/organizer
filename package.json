@@ -1,6 +1,6 @@
 {
   "name": "dofus-organizer",
-  "version": "1.0.0",
+  "version": "0.3.0",
   "description": "A modern cross-platform Dofus Window Organizer with keyboard shortcuts, window management, and navigation dock",
   "main": "src/main.js",
   "scripts": {
@@ -20,10 +20,10 @@
     "lint:fix": "eslint src/ --fix"
   },
   "keywords": [
-    "dofus", 
-    "organizer", 
-    "window-manager", 
-    "gaming", 
+    "dofus",
+    "organizer",
+    "window-manager",
+    "gaming",
     "multiboxing",
     "electron",
     "cross-platform"
@@ -74,22 +74,31 @@
       {
         "from": "assets/",
         "to": "assets/",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icons/organizer.ico",
@@ -101,19 +110,27 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "rpm",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "tar.gz",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icons/organizer.png",
@@ -130,11 +147,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icons/organizer.icns",
@@ -152,7 +175,13 @@
       "license": "LICENSE",
       "warningsAsErrors": false,
       "displayLanguageSelector": true,
-      "installerLanguages": ["en_US", "fr_FR", "de_DE", "es_ES", "it_IT"]
+      "installerLanguages": [
+        "en_US",
+        "fr_FR",
+        "de_DE",
+        "es_ES",
+        "it_IT"
+      ]
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"
