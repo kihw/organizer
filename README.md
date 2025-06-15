@@ -1,6 +1,6 @@
-# Dofus Organizer - Cross-Platform Edition
+# Dorganize - Cross-Platform Edition
 
-A modern cross-platform Dofus Window Organizer with keyboard shortcuts, window management, and navigation dock. This application helps Dofus players manage multiple game windows efficiently across Windows, Linux, and macOS.
+A modern cross-platform window organizer for Dofus with keyboard shortcuts, window management, and navigation dock. This application helps Dofus players manage multiple game windows efficiently across Windows, Linux, and macOS.
 
 ## Features
 
@@ -62,14 +62,14 @@ A modern cross-platform Dofus Window Organizer with keyboard shortcuts, window m
 
 #### Method 1: Binary Installation (Recommended)
 1. Download the latest installer from the releases page
-2. Run `DofusOrganizer-Setup.exe` as Administrator
+2. Run `Dorganize-Setup.exe` as Administrator
 3. Follow the installation wizard
 4. Launch from Start Menu or Desktop shortcut
 
 #### Method 2: From Source
 ```batch
 # Clone the repository
-git clone https://github.com/kihw/organizer.git
+git clone https://github.com/kihw/dorganize.git
 cd organizer
 
 # Install dependencies
@@ -103,7 +103,7 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Clone and build
-git clone https://github.com/kihw/organizer.git
+git clone https://github.com/kihw/dorganize.git
 cd organizer
 npm install
 npm run build-linux
@@ -114,7 +114,7 @@ npm run build-linux
 #### Method 1: DMG Installation
 1. Download the latest DMG from releases
 2. Open the DMG file
-3. Drag Dofus Organizer to Applications folder
+3. Drag Dorganize to Applications folder
 4. Launch from Applications or Launchpad
 
 #### Method 2: From Source
@@ -126,7 +126,7 @@ npm run build-linux
 brew install node
 
 # Clone and build
-git clone https://github.com/kihw/organizer.git
+git clone https://github.com/kihw/dorganize.git
 cd organizer
 npm install
 npm run build-mac
@@ -215,9 +215,9 @@ The application automatically detects both French and English class names and no
 ## Configuration Files
 
 The application stores its configuration in:
-- **Windows**: `%APPDATA%\dofus-organizer\`
-- **Linux**: `~/.config/dofus-organizer/`
-- **macOS**: `~/Library/Application Support/dofus-organizer/`
+- **Windows**: `%APPDATA%\dorganize\`
+- **Linux**: `~/.config/dorganize/`
+- **macOS**: `~/Library/Application Support/dorganize/`
 
 Settings include:
 - Window shortcuts and assignments
@@ -331,7 +331,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Credits
 
-- Original AutoIt version: Dofus Organizer community
+- Original AutoIt version: Dorganize community
 - Cross-platform conversion: Modern web technologies (Electron, Node.js)
 - Window management: Platform-specific APIs and tools
 - Global shortcuts: Electron globalShortcut API
@@ -350,11 +350,11 @@ For issues, feature requests, or questions:
 1. Run the application from Command Prompt to see console output
 2. Check Windows Event Viewer for application errors
 3. Include your Windows version and build number
-4. Attach the application log file from `%APPDATA%\dofus-organizer\logs\`
+4. Attach the application log file from `%APPDATA%\dorganize\logs\`
 
 #### Linux
 1. Run the application from terminal to see console output
-2. Check system logs: `journalctl -u dofus-organizer`
+2. Check system logs: `journalctl -u dorganize`
 3. Include your distribution and version
 4. Verify all dependencies are installed
 

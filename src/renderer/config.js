@@ -362,7 +362,7 @@ class ConfigRenderer {
         // Update labels
         const labels = {
             'dock-label': this.language.displayGUI_dock || 'Enable navigation dock',
-            'title': 'Dofus Organizer - Configuration'
+            'title': 'Dorganize - Configuration'
         };
 
         Object.keys(labels).forEach(id => {

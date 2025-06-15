@@ -82,7 +82,7 @@ class WindowManagerWindows {
   async initializePowerShell() {
     // SIMPLIFIÉ: Script PowerShell basique sans logique d'activation
     const script = `
-# Dofus Organizer Windows Management Script - Detection Only
+# Dorganize Windows Management Script - Detection Only
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
@@ -259,7 +259,7 @@ try {
     const path = require('path');
     const fs = require('fs');
 
-    this.psScriptPath = path.join(os.tmpdir(), 'dofus-organizer-windows-dummy.ps1');
+    this.psScriptPath = path.join(os.tmpdir(), 'dorganize-windows-dummy.ps1');
 
     try {
       fs.writeFileSync(this.psScriptPath, script, 'utf8');
