@@ -42,8 +42,10 @@ class DofusOrganizerPython {
     app.whenReady().then(() => {
       this.loadSettings();
       this.migrateOldSettings();
-      this.startWindowDetection();
       this.setupIPC();
+      // Create the main configuration window on startup so the
+      // application is visible immediately
+      this.createConfigWindow();
     });
 
     app.on('window-all-closed', () => {
