@@ -43,7 +43,7 @@ class WindowManagerWindows {
       'steamer': { name: 'Steamer', avatar: '15' },
       'eliotrope': { name: 'Eliotrope', avatar: '16' },
       'huppermage': { name: 'Huppermage', avatar: '17' },
-      'ouginak': { name: 'Ouginak', avatar: '18' },
+      'ouginak': { name:'Ouginak', avatar: '18' },
       'forgelance': { name: 'Forgelance', avatar: '20' }
     };
     
@@ -137,6 +137,7 @@ class WindowManagerWindows {
 
   /**
    * NOUVELLE MÉTHODE - Activation native sans PowerShell
+   * CORRECTION: Passer le windowId au lieu du handle
    */
   async activateWindow(windowId) {
     const startTime = Date.now();
@@ -144,33 +145,14 @@ class WindowManagerWindows {
     try {
       console.log(`WindowManagerWindows: NATIVE activation for ${windowId} (NO POWERSHELL)`);
       
-      // Obtenir le handle de fenêtre
-      const handle = this.handleMapping.get(windowId);
-      if (!handle || handle === 0) {
-        console.error(`WindowManagerWindows: No valid handle for ${windowId}`);
-        return false;
-      }
-      
-      // Vérifier le cache d'activation pour la performance
-      const cacheKey = handle.toString();
-      const now = Date.now();
-      
-      if (this.activationCache.has(cacheKey)) {
-        const lastActivation = this.activationCache.get(cacheKey);
-        if (now - lastActivation < 500) { // 500ms cooldown
-          console.log(`WindowManagerWindows: Recent activation cached for ${windowId}`);
-          return true;
-        }
-      }
-      
-      // ACTIVATION NATIVE - Plus de PowerShell !
-      const success = await this.nativeActivator.activateWindow(handle);
+      // CORRECTION CRITIQUE: Passer le windowId directement au NativeWindowActivator
+      // Il va lui-même extraire les infos et trouver le bon handle
+      const success = await this.nativeActivator.activateWindow(windowId);
       
       const duration = Date.now() - startTime;
       this.updateActivationStats(duration);
       
       if (success) {
-        this.activationCache.set(cacheKey, now);
         this.updateActiveState(windowId);
         console.log(`WindowManagerWindows: NATIVE activation SUCCESS for ${windowId} in ${duration}ms ✅`);
         return true;
